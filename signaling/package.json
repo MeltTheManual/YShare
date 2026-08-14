@@ -1,0 +1,15 @@
+{
+  "name": "yshare-signaling",
+  "version": "0.1.0",
+  "private": true,
+  "description": "YShare signaling server: short-lived rooms, handshake relay, and optional short-lived TURN credentials. Self-hosted; file bytes never pass through it.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test-client.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "license": "MIT"
+}

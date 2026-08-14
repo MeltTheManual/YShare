@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor / tooling cruft
+.DS_Store
+Thumbs.db
+.obsidian/
+.claude/
+
+# Local env
+.env
+.env.*
+!.env.example
+
+# Private signing / transport material (the tracked Android debug.keystore is
+# already versioned; these patterns protect future real release material).
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+keystore.properties
+signing.properties

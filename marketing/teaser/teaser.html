@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>YShare — Teaser v4 (pure)</title>
+<style>
+  @font-face { font-family: 'IS';  src: url('assets/fonts/InstrumentSerif-Regular.ttf'); }
+  @font-face { font-family: 'ISI'; src: url('assets/fonts/InstrumentSerif-Italic.ttf'); }
+  @font-face { font-family: 'JM';  src: url('assets/fonts/JetBrainsMono-Regular.ttf'); }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #0d0b08; }
+  :root {
+    --void: #0d0b08; --cream: #efe6d2; --orange: #d4551f; --dim: #9a8d75; --dimmer: #6f6455;
+  }
+  #stage { position: absolute; width: 1920px; height: 1080px; background: var(--void); overflow: hidden; }
+
+  #glow { position: absolute; inset: -200px; pointer-events: none;
+    background: radial-gradient(ellipse 1200px 720px at 50% 50%, #d4551f10 0%, #efe6d206 36%, transparent 70%); }
+
+  .scene { position: absolute; inset: 0; display: none; }
+
+  #open .line, #promise .line, #closing .line {
+    position: absolute; left: 0; right: 0; text-align: center; }
+  #open .line { top: 512px; font-family: 'JM'; font-size: 26px; letter-spacing: 22px; color: #b7a98f; }
+
+  /* giant serif letterform, cream on darkness */
+  #cuY { position: absolute; inset: 0; overflow: hidden; }
+  #cuY .letter { position: absolute; left: -60px; top: -580px; font-family: 'IS';
+    font-size: 2100px; color: var(--cream); opacity: .97;
+    text-shadow: 0 0 110px #d4551f26; }
+  .sweep { position: absolute; top: -300px; bottom: -300px; width: 480px;
+    background: linear-gradient(100deg, transparent 0%, #fff7ef10 45%, #fff7ef1e 50%, #fff7ef10 55%, transparent 100%);
+    transform: rotate(8deg); pointer-events: none; }
+
+  /* the journey: an ember crossing the dark */
+  #journey { position: absolute; inset: 0; }
+  #jline { position: absolute; left: 240px; right: 240px; top: 540px; height: 0;
+    border-top: 2px dashed #4a4335; }
+  #jmask { position: absolute; top: 536px; right: 240px; height: 10px; background: var(--void); }
+  #ember { position: absolute; top: 533px; width: 16px; height: 16px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #f0a578 0%, #d4551f 55%, #7d2c0a 100%);
+    box-shadow: 0 0 26px #d4551f99, 0 0 70px #d4551f44; }
+  #etrail { position: absolute; top: 540px; height: 2px;
+    background: linear-gradient(to left, #d4551fbb 0%, #d4551f22 60%, transparent 100%); }
+  #jfrom, #jto { position: absolute; top: 590px; font-family: 'JM'; font-size: 21px;
+    letter-spacing: 9px; color: var(--dim); }
+  #jfrom { left: 242px; } #jto { right: 242px; }
+
+  /* the promise line */
+  #promise .line { top: 496px; font-family: 'ISI'; font-size: 92px; color: var(--cream); }
+  #promise .accent { color: var(--orange); }
+
+  /* closing reveal — type only, no shapes */
+  #wm4 { position: absolute; left: 0; right: 0; top: 452px; text-align: center; font-size: 150px;
+    white-space: nowrap; }
+  #wm4 .y { font-family: 'IS'; color: var(--cream); }
+  #wm4 .r { font-family: 'ISI'; color: var(--orange); }
+  #rule4 { position: absolute; left: 910px; top: 650px; width: 100px; height: 3px;
+    background: var(--orange); transform-origin: center; }
+  #tag4 { position: absolute; left: 0; right: 0; top: 688px; text-align: center;
+    font-family: 'JM'; font-size: 22px; letter-spacing: 16px; color: var(--dim); }
+  #soon { position: absolute; left: 0; right: 0; top: 754px; text-align: center;
+    font-family: 'JM'; font-size: 17px; letter-spacing: 12px; color: var(--dimmer); }
+
+  #grain { position: absolute; inset: 0; opacity: .35; pointer-events: none;
+    background-image: radial-gradient(#ffffff06 1px, transparent 1.3px); background-size: 19px 19px; }
+  #vig { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 46%, #000000c4 100%); }
+  .matte { position: absolute; left: 0; right: 0; height: 132px; background: #000; z-index: 40; }
+  #matteT { top: 0; } #matteB { bottom: 0; }
+  #fade { position: absolute; inset: 0; background: #000; z-index: 50; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="glow"></div>
+
+  <div class="scene" id="open"><div class="line" id="openline">A NEW WAY TO SEND</div></div>
+
+  <div class="scene" id="cuY">
+    <div class="letter">Y</div>
+    <div class="sweep" id="sweep1"></div>
+  </div>
+
+  <div class="scene" id="journey">
+    <div id="jline"></div>
+    <div id="jmask"></div>
+    <div id="etrail"></div>
+    <div id="ember"></div>
+    <div id="jfrom">FROM YOU</div>
+    <div id="jto">TO THEM</div>
+  </div>
+
+  <div class="scene" id="promise">
+    <div class="line">Nothing <span class="accent">in between</span>.</div>
+  </div>
+
+  <div class="scene" id="closing">
+    <div id="wm4"><span class="y">Y</span><span class="r">Share</span></div>
+    <div id="rule4"></div>
+    <div id="tag4">SEND ANYTHING TO ANYONE</div>
+    <div id="soon">COMING SOON</div>
+  </div>
+
+  <div id="grain"></div>
+  <div id="vig"></div>
+  <div class="matte" id="matteT"></div>
+  <div class="matte" id="matteB"></div>
+  <div id="fade"></div>
+</div>
+
+<script>
+// Pure teaser — 26s. Darkness, type, and one traveling ember. No UI, no shapes.
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, u) => a + (b - a) * u;
+const io = (u) => { u = clamp(u, 0, 1); return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; };
+const eo = (u) => { u = clamp(u, 0, 1); return 1 - Math.pow(1 - u, 3); };
+function show(el, on) { el.style.display = on ? 'block' : 'none'; }
+const scenes = ['open', 'cuY', 'journey', 'promise', 'closing'];
+
+// journey geometry
+const JL = 240, JR = 1920 - 240;   // line endpoints (left/right x)
+
+async function SEEK(t) {
+  for (const s of scenes) show($(s), false);
+  $('glow').style.opacity = 0.7 + 0.3 * Math.sin(t * 0.6);
+  let fade = 0;
+
+  if (t < 3.2) {                              // ---- whisper open
+    show($('open'), true);
+    const inU = eo((t - 0.7) / 1.2);
+    const outU = eo((t - 2.4) / 0.7);
+    $('openline').style.opacity = inU * (1 - outU);
+    $('openline').style.letterSpacing = lerp(30, 18, io((t - 0.7) / 2.2)) + 'px';
+    fade = t < 0.8 ? 1 - eo(t / 0.8) : 0;
+  } else if (t < 7.4) {                       // ---- the letterform
+    show($('cuY'), true);
+    const u = (t - 3.2) / 4.2;
+    $('cuY').firstElementChild.style.transform =
+      `translate(${lerp(20, -140, io(u))}px, ${lerp(20, -50, io(u))}px)`;
+    $('sweep1').style.left = lerp(-520, 2150, io((t - 3.4) / 3.6)) + 'px';
+    fade = t < 3.7 ? (1 - eo((t - 3.2) / 0.5)) * 0.92 : (t > 6.95 ? eo((t - 6.95) / 0.45) * 0.92 : 0);
+  } else if (t < 14.2) {                      // ---- the journey
+    show($('journey'), true);
+    // the dashed route draws itself first
+    const drawU = io((t - 7.6) / 1.4);
+    $('jmask').style.width = ((1 - drawU) * (JR - JL)) + 'px';
+    // the ember departs at 9.2, arrives 12.6 (slow, confident)
+    const em = io((t - 9.2) / 3.4);
+    const ex = lerp(JL, JR, em);
+    $('ember').style.left = (ex - 8) + 'px';
+    $('ember').style.opacity = eo((t - 8.9) / 0.4);
+    // glow pulse as it travels; swells on arrival
+    const arrive = clamp((t - 12.3) / 0.5, 0, 1);
+    $('ember').style.boxShadow =
+      `0 0 ${26 + 10 * Math.sin(t * 4) + arrive * 34}px #d4551f99, 0 0 ${70 + arrive * 90}px #d4551f44`;
+    // trail behind the ember
+    const trailW = clamp(ex - JL, 0, JR - JL) * 0.55;
+    $('etrail').style.left = (ex - trailW) + 'px';
+    $('etrail').style.width = trailW + 'px';
+    $('etrail').style.opacity = 0.8 * eo((t - 9.2) / 0.6) * (1 - arrive * 0.4);
+    // labels
+    $('jfrom').style.opacity = eo((t - 8.3) / 0.6) * (1 - eo((t - 12.8) / 0.8) * 0.6);
+    $('jto').style.opacity = eo((t - 11.4) / 0.7);
+    fade = t < 8.0 ? (1 - eo((t - 7.4) / 0.6)) * 0.92 : (t > 13.7 ? eo((t - 13.7) / 0.5) * 0.92 : 0);
+  } else if (t < 17.6) {                      // ---- the promise
+    show($('promise'), true);
+    const u = eo((t - 14.4) / 0.9);
+    const out = eo((t - 16.9) / 0.6);
+    $('promise').firstElementChild.style.opacity = u * (1 - out);
+    $('promise').firstElementChild.style.transform =
+      `translateY(${lerp(26, 0, u)}px) scale(${1 + (t - 14.4) * 0.004})`;
+  } else {                                     // ---- the name
+    show($('closing'), true);
+    const wu = eo((t - 18.2) / 1.1);
+    $('wm4').style.opacity = wu;
+    $('wm4').style.letterSpacing = lerp(28, 2, io((t - 18.2) / 1.9)) + 'px';
+    $('rule4').style.transform = `scaleX(${eo((t - 19.4) / 0.7)})`;
+    $('tag4').style.opacity = eo((t - 20.0) / 0.9) * 0.95;
+    $('soon').style.opacity = eo((t - 21.2) / 0.9) * 0.85;
+    if (t > 24.6) fade = eo((t - 24.6) / 1.1);
+  }
+
+  $('fade').style.opacity = fade;
+  return true;
+}
+
+let ready = (async () => {
+  await document.fonts.ready;
+  await SEEK(0);
+  return true;
+})();
+window.FILM = { SEEK, ready: () => ready, DURATION: 26 };
+</script>
+</body>
+</html>
