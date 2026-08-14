@@ -60,7 +60,24 @@ npm run verify
 ```
 
 That runs the syntax check, the shared and desktop tests, the signaling suite,
-and the mobile lint, TypeScript, and Jest checks. If you touched Android code,
+and the mobile lint, TypeScript, and Jest checks.
+
+There are also two end to end tests that drive the real packaged desktop app. They
+are not part of `npm run verify` because they need a built app, so run them by hand
+after `npm run dist` when you touch transfers, the signaling service, or the server
+setting:
+
+```bash
+node tests/e2e-full.js
+node tests/e2e-interrupt.js
+```
+
+`e2e-full` starts the bundled signaling service with no relay, launches two hidden
+copies of the app with fresh settings, and sends a real file and a real folder
+between them, then compares every byte on disk. `e2e-interrupt` proves that
+removing the server kills any claim code that was still live. Both windows stay
+hidden, so neither steals your focus, and both fail if the app logs a single
+console error. If you touched Android code,
 build the debug APK too, and say in your pull request what you actually ran and
 what you could not test — an honest "I could not test this on a real phone" is
 much more useful than a confident guess.
