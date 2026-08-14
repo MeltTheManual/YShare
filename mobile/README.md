@@ -70,11 +70,31 @@ YSHARE_RELEASE_KEY_PASSWORD
 ```
 
 Then run `build-release.bat` or `gradlew.bat assembleRelease`. Never commit those values or the keystore.
-A public release also requires the production `https://`/`wss://` signaling domain; the disposable
-cleartext test endpoint is development-only.
 
-The current application ID, `com.ysharemobile`, is provisional. Choosing the permanent ID and private
-signing identity is an owner decision because changing either after public installs is costly and disruptive.
+Quick Connect in a release build needs a `wss://` signaling server, which each person configures in the app
+itself — nothing is compiled in. See `docs/SELF-HOSTING.md`.
+
+## Application ID
+
+The application ID is **`app.yshare`** (settled 14 August 2026). This is permanent: Android identifies and
+updates an app by this string, so changing it after anyone installs YShare would produce a second, separate
+app rather than an update.
+
+The internal Kotlin package is still `com.ysharemobile`, and that is fine — `namespace` and `applicationId`
+are different things, and only the latter is user-visible. Renaming the internal package is optional tidying
+with no user benefit.
+
+If you previously sideloaded a test build under the old ID, the new build installs **alongside** it instead
+of replacing it. Uninstall the old one to avoid confusion.
+
+The release signing identity is still outstanding. Create the keystore yourself so its password never passes
+through anyone else, keep it outside this repository, and back it up somewhere you control — losing it means
+never being able to update the published app again:
+
+```powershell
+keytool -genkeypair -v -storetype PKCS12 -keystore D:\Claude\keys\yshare-release.keystore `
+  -alias yshare -keyalg RSA -keysize 4096 -validity 10000
+```
 
 ## Device connection
 

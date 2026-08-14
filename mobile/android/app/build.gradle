@@ -96,9 +96,17 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
+    // namespace = the internal Kotlin/R package. applicationId = the permanent
+    // identity Android installs and updates by. They are allowed to differ, and
+    // here they deliberately do: the ID was settled (app.yshare, 14 Aug 2026)
+    // while the internal package kept its original name. Renaming the internal
+    // package is optional cleanup with no user-visible effect; do it only when a
+    // working Gradle build can prove the native modules still register.
     namespace "com.ysharemobile"
     defaultConfig {
-        applicationId "com.ysharemobile"
+        // PERMANENT. Once anyone installs YShare this can never change: a
+        // different applicationId is a different app, not an update.
+        applicationId "app.yshare"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 10
