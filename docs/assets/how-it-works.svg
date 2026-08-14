@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 300" width="1100" height="300" role="img" aria-label="Three steps: pick a file, share the six character code, they accept and it arrives verified.">
+  <defs>
+    <style>
+      .paper  { fill: #f4eee1; }
+      .card   { fill: #fbf7ec; }
+      .tile   { fill: #fffdf6; }
+      .inkT   { fill: #26221c; }
+      .bodyT  { fill: #55493a; }
+      .faintT { fill: #8a7f6d; }
+      .orangeT{ fill: #d4551f; }
+      .serif  { font-family: Georgia, "Times New Roman", serif; }
+      .mono   { font-family: "JetBrains Mono", Consolas, "Courier New", monospace; }
+      .box    { fill: #fbf7ec; stroke: #26221c; stroke-width: 1; }
+      .shadow { fill: #26221c; opacity: 0.13; }
+      .dash   { stroke: #a99c85; stroke-width: 1.5; stroke-dasharray: 6 6; fill: none; }
+    </style>
+  </defs>
+
+  <rect width="1100" height="300" class="paper"/>
+
+  <!-- STEP 1 -->
+  <g transform="translate(40,58)">
+    <rect x="6" y="6" width="288" height="196" class="shadow"/>
+    <rect width="288" height="196" class="box"/>
+    <rect x="0" y="0" width="288" height="4" class="orangeT"/>
+    <text x="20" y="38" class="mono faintT" font-size="11" letter-spacing="3">STEP ONE</text>
+    <text x="20" y="78" class="serif inkT" font-size="30">Pick a file</text>
+    <text x="20" y="112" class="serif bodyT" font-size="15">Or a whole folder. On your</text>
+    <text x="20" y="134" class="serif bodyT" font-size="15">computer or your phone.</text>
+    <!-- little file glyph -->
+    <g transform="translate(20,150)">
+      <rect width="34" height="42" class="tile" stroke="#26221c" stroke-width="1"/>
+      <path d="M 24 0 L 34 10 L 24 10 Z" fill="#26221c" opacity="0.15"/>
+      <rect x="8" y="16" width="18" height="2" fill="#a99c85"/>
+      <rect x="8" y="23" width="18" height="2" fill="#a99c85"/>
+      <rect x="8" y="30" width="12" height="2" fill="#a99c85"/>
+    </g>
+  </g>
+
+  <path d="M 342 156 H 386" class="dash"/>
+  <path d="M 380 150 l 10 6 l -10 6 z" class="orangeT"/>
+
+  <!-- STEP 2 -->
+  <g transform="translate(406,58)">
+    <rect x="6" y="6" width="288" height="196" class="shadow"/>
+    <rect width="288" height="196" class="box"/>
+    <rect x="0" y="0" width="288" height="4" class="orangeT"/>
+    <text x="20" y="38" class="mono faintT" font-size="11" letter-spacing="3">STEP TWO</text>
+    <text x="20" y="78" class="serif inkT" font-size="30">Read out the code</text>
+    <text x="20" y="112" class="serif bodyT" font-size="15">Six characters. Say it, text it,</text>
+    <text x="20" y="134" class="serif bodyT" font-size="15">write it on a napkin.</text>
+    <g transform="translate(20,148)">
+      <rect width="34" height="30" class="tile" stroke="#26221c" stroke-width="1"/>
+      <text x="17" y="21" text-anchor="middle" class="mono inkT" font-size="15">K</text>
+      <rect x="40" width="34" height="30" class="tile" stroke="#26221c" stroke-width="1"/>
+      <text x="57" y="21" text-anchor="middle" class="mono inkT" font-size="15">4</text>
+      <rect x="80" width="34" height="30" class="tile" stroke="#26221c" stroke-width="1"/>
+      <text x="97" y="21" text-anchor="middle" class="mono inkT" font-size="15">P</text>
+      <rect x="120" width="34" height="30" class="tile" stroke="#26221c" stroke-width="1"/>
+      <text x="137" y="21" text-anchor="middle" class="mono inkT" font-size="15">Z</text>
+      <rect x="160" width="34" height="30" class="tile" stroke="#26221c" stroke-width="1"/>
+      <text x="177" y="21" text-anchor="middle" class="mono inkT" font-size="15">7</text>
+      <rect x="200" width="34" height="30" class="tile" stroke="#26221c" stroke-width="1"/>
+      <text x="217" y="21" text-anchor="middle" class="mono inkT" font-size="15">M</text>
+    </g>
+  </g>
+
+  <path d="M 708 156 H 752" class="dash"/>
+  <path d="M 746 150 l 10 6 l -10 6 z" class="orangeT"/>
+
+  <!-- STEP 3 -->
+  <g transform="translate(772,58)">
+    <rect x="6" y="6" width="288" height="196" class="shadow"/>
+    <rect width="288" height="196" class="box"/>
+    <rect x="0" y="0" width="288" height="4" class="orangeT"/>
+    <text x="20" y="38" class="mono faintT" font-size="11" letter-spacing="3">STEP THREE</text>
+    <text x="20" y="78" class="serif inkT" font-size="30">They accept</text>
+    <text x="20" y="112" class="serif bodyT" font-size="15">They see what it is first.</text>
+    <text x="20" y="134" class="serif bodyT" font-size="15">Nothing lands without a tap.</text>
+    <g transform="translate(20,150)">
+      <rect width="150" height="34" fill="#d4551f"/>
+      <text x="75" y="22" text-anchor="middle" class="mono" font-size="12" fill="#fff7ef" letter-spacing="2">ACCEPT</text>
+    </g>
+  </g>
+
+  <text x="550" y="272" text-anchor="middle" class="mono faintT" font-size="12" letter-spacing="3">THEN IT TRANSFERS, CHECKS ITSELF, AND TELLS YOU THE TRUTH</text>
+</svg>

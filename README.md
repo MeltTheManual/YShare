@@ -1,105 +1,83 @@
-# YShare
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+  <img alt="YShare. Peer to peer file sharing. Send anything to anyone." src="docs/assets/hero-light.svg">
+</picture>
 
-**Send a file straight from one device to another. No account, no upload, no
-cloud copy sitting on somebody else's disk.**
+## Send a file straight to someone. No account. No upload. No cloud copy.
 
-You pick a file. YShare gives you a six-character code. The other person types
-that code, sees exactly what is being offered, and taps Accept. The file then
-travels device-to-device over an encrypted WebRTC connection, gets checked with a
-SHA-256 hash, and only then lands in their Downloads folder.
+You pick a file. YShare gives you a six character code. You read that code to the other person. They type it in, see exactly what is being offered, and tap Accept. The file then travels directly between the two devices.
 
-Windows and Android today. macOS, Linux, and iOS are later, not never.
+Nothing gets uploaded anywhere first. There is no copy sitting on a company's disk afterwards. When the transfer finishes, YShare checks the file byte for byte before it tells you it worked.
 
----
+Windows and Android today. macOS, Linux and iOS later.
 
-## Why
+<br>
 
-Sending a 2 GB folder to someone usually means uploading it to a cloud service,
-waiting, sending a link, and hoping they download it before the link expires — a
-round trip through a company's server for a file that only needed to go across
-the room.
+<img alt="Three steps. One: pick a file, or a whole folder, on your computer or your phone. Two: read out the six character code. Three: they see what it is and accept it." src="docs/assets/how-it-works.svg">
 
-YShare skips the middle. There is no storage backend to fill up, no quota, and no
-copy of your file left anywhere. When two devices can reach each other, the bytes
-go straight across.
+<br>
+
+## Why this exists
+
+Sending a big folder to someone usually means uploading it to a cloud service, waiting, sending a link, then hoping they download it before the link dies. Your file takes a round trip through a company's server to reach someone who might be sitting in the same room.
+
+YShare cuts out the middle. There is no storage to fill up, no quota, no expiring link, and no second copy of your file living somewhere you forgot about.
 
 ## What it does
 
-- Send a **single file or a whole folder**, in either direction.
-- **Six-character claim codes**, or long manual codes when you have no server.
-- **Direct connection first**, with an optional relay only if that fails.
-- **The receiver must accept.** A sender cannot push a file onto your device.
+- Sends a **single file or a whole folder**, either direction, phone to computer or the other way.
+- **Six character codes**, or longer manual codes when you have no server at all.
+- **Direct connection first.** A relay is only used if the two networks refuse to talk.
+- **The receiver has to say yes.** Nobody can push a file onto your device.
 - **Optional password** on a transfer.
-- Progress, speed, ETA, and cancel from either side.
-- **SHA-256 verification** before anything is published as complete.
-- Partial files are cleaned up on cancel, failure, or decline.
-- Android keeps transfers alive with a foreground service and notification.
+- Progress, speed, time remaining, and cancel from either side.
+- **Checks the file with SHA-256** before calling it done.
+- Half finished files are cleaned up when something goes wrong.
+- Android keeps the transfer alive in the background with a notification.
 
-## Honest status
+<br>
 
-Pre-1.0, and built in the open. Desktop `0.0.12` and Android `0.0.10` are
-verified working in both directions on real hardware — including a full
-two-way transfer between a Windows PC and an Android 13 phone with matching
-hashes on both ends.
+<img alt="Your file goes directly between the two devices, encrypted. Only a small introduction of a few kilobytes touches a server, and it never sees file data. YShare runs none of these servers." src="docs/assets/what-travels.svg">
 
-What is **not** done yet, so you know before you invest time:
+<br>
 
-- **No downloadable builds yet.** You build from source today. The Windows
-  installer is unsigned and the Android app still uses a development signing
-  identity, and neither belongs in the hands of real users until that is fixed.
-- **Cross-network transfers are not fully proven.** Same-network and direct
-  transfers are tested; a full unrelated-network test with a real relay is still
-  outstanding.
-- Interrupted transfers restart from zero. There is no resume yet.
-- Android publishing to Downloads needs Android 10 or newer.
-- One sender to one receiver, one item at a time.
+## About that server
 
-## Quick Connect needs a server — and it is not ours
+This is the part people ask about, so here it is plainly.
 
-This is the part most people ask about, so plainly:
+**YShare runs no servers.** There is no address built into the app. Nothing you send passes through us, and nobody ends up paying for somebody else's traffic.
 
-**YShare runs no servers.** No address is compiled into the app, so nothing you
-send passes through us, and nobody inherits somebody else's hosting bill.
+The six character code does need a small "introduce these two devices" service somewhere. That service is in this repository, in `signaling/`. You can run it yourself in about five minutes, or point YShare at one you trust. The address goes in the app's own settings, on the home screen.
 
-The six-character code needs a tiny "introduce these two devices" service to
-exist somewhere. This repository contains that service (`signaling/`). Run it
-yourself in about five minutes, or point YShare at one you trust — the address
-goes in the app's own settings, on the home screen.
+That service only passes a handshake of a few kilobytes. **Your files never go through it.**
 
-The service only passes a handshake of a few kilobytes. **Your files never go
-through it.**
+Do not want to run anything at all? Use the manual codes instead. They need no server, and every safety rule stays exactly the same. It is a little more copying and pasting, that is the only difference.
 
-Don't want to run anything at all? Use the **manual codes**. They need no server
-whatsoever, and every safety rule stays exactly the same.
+Setting one up: [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md)
 
-See **[docs/SELF-HOSTING.md](docs/SELF-HOSTING.md)**.
+<br>
 
-## How it works
+<img alt="The file is cut into eight pieces that travel at the same time, then get rebuilt in order and checked with a SHA-256 hash." src="docs/assets/eight-lanes.svg">
 
-```text
-Sender                                            Receiver
-┌──────────────────┐                        ┌──────────────────┐
-│ pick a file      │                        │ type the code    │
-│ shared engine    │◀══ 8 data channels ═══▶│ shared engine    │
-│ disk reads       │      file bytes        │ disk writes      │
-└────────┬─────────┘                        └────────┬─────────┘
-         │                                           │
-         └────── code + connection details ──────────┘
-                    signaling server
-                 (a few KB, no file data)
-```
+<br>
 
-The file is split into eight ranges carried by eight parallel WebRTC data
-channels — that is what makes it fast. Both apps share one protocol
-implementation (`shared/engine.js`), so desktop and Android can never drift apart
-on validation, encoding, or safety rules.
+## Where it is up to
 
-More detail: [`ARCHITECTURE.md`](ARCHITECTURE.md). Security boundaries and the
-limits of what YShare protects: [`SECURITY.md`](SECURITY.md).
+This is pre 1.0 and built in the open, so here is the honest version.
 
-## Build it
+Desktop `0.0.12` and Android `0.0.10` both work, in both directions, on real hardware. A file and a folder have gone across with matching hashes on both ends.
 
-You need Node.js 22.11 or newer. For Android, also Java 17 and the Android SDK.
+What is **not** finished:
+
+- **There is nothing to download yet.** You build it from source today. The Windows installer is unsigned and the Android app still uses a development signing key, so neither belongs in a stranger's hands until that is sorted.
+- **Transfers between different networks are not fully proven.** Same network and direct connections are tested. A full test across unrelated networks through a real relay is still to come.
+- If a transfer breaks, it starts again from zero. There is no resume yet.
+- Saving to Downloads on Android needs Android 10 or newer.
+- One sender, one receiver, one thing at a time.
+
+## Try it
+
+You need Node.js 22.11 or newer. For the Android app you also need Java 17 and the Android SDK.
 
 ```bash
 git clone https://github.com/MeltTheManual/YShare.git
@@ -115,47 +93,56 @@ Run the desktop app:
 npm start
 ```
 
-Build a Windows installer:
+Build the Windows installer:
 
 ```bash
 npm run dist
 ```
 
-Build the Android app — see [`mobile/README.md`](mobile/README.md) for the SDK
-setup and the release-signing rules:
+The Android app needs a few more steps, so those live in [mobile/README.md](mobile/README.md).
 
-```bash
-cd mobile
-npm run android
-```
-
-Run everything the project checks before a change is accepted:
+Run everything the project checks before a change is allowed in:
 
 ```bash
 npm run verify
 ```
 
-## Repository map
+## How it is built
+
+Two apps, one rulebook.
 
 ```text
-shared/engine.js     the protocol both apps share: codes, validation, ranges, hashing
-src/                 desktop app (Electron): main process owns disk, renderer owns WebRTC
-mobile/              Android app (React Native) plus its native file and service modules
-signaling/           the small room-broker service you can host yourself
+shared/engine.js     the rules both apps follow: codes, validation, ranges, hashing
+src/                 desktop app (Electron). Main process owns the disk, renderer owns WebRTC
+mobile/              Android app (React Native) plus its native file and background service code
+signaling/           the small introduction service you can host yourself
 tests/               shared and desktop regression tests
-test-harness/        network and relay experiments
-docs/                self-hosting guide
-marketing/teaser/    the launch teaser film, generated entirely from code
+docs/                self hosting guide and the pictures on this page
 ```
+
+The desktop app and the phone app are separate programs written in different languages. They share one file, `shared/engine.js`, which holds every rule about how a transfer works. That is why a file can go phone to computer without the two ends disagreeing about anything.
+
+The file itself is split into eight pieces carried by eight parallel WebRTC data channels, which is what makes it quick. The receiving side writes each piece straight to its correct position on disk, then hashes the finished file before publishing it.
+
+More detail is in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Safety
+
+The short version:
+
+- Everything the other side sends is treated as untrusted, and checked twice.
+- What you accepted is what you get. The transfer is locked to the offer you agreed to.
+- Success means written, hashed, verified and saved. Nothing else counts as success.
+- File paths cannot escape the folder you chose.
+
+The longer version, including a clear list of what YShare does **not** protect you from, is in [SECURITY.md](SECURITY.md). Found a security problem? That file explains how to report it privately.
 
 ## Contributing
 
-Bug reports and pull requests are welcome — please read
-[`CONTRIBUTING.md`](CONTRIBUTING.md) first, especially the safety rules. Security
-issues go through [`SECURITY.md`](SECURITY.md), privately, not the issue tracker.
+Bug reports and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first, especially the safety rules near the top. They are not style preferences, they are the reasons this thing can be trusted with someone's files.
 
 ## Licence
 
-MIT — see [`LICENSE`](LICENSE). Bundled fonts (Instrument Serif, JetBrains Mono,
-Press Start 2P) are under the SIL Open Font License and pako is MIT/Zlib; the
-full texts are in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+MIT. See [LICENSE](LICENSE).
+
+The bundled fonts (Instrument Serif, JetBrains Mono, Press Start 2P) are under the SIL Open Font License, and pako is MIT and Zlib. Full texts are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
