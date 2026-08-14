@@ -93,7 +93,8 @@ test('no signaling server address is compiled into the shipped app', () => {
   ];
   // A bare IPv4 literal, or any ws/wss URL pointing somewhere other than this machine.
   const ipLiteral = /\b(?!0\.0\.0\.0|127\.0\.0\.1|10\.0\.2\.2)((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(25[0-5]|2[0-4]\d|1?\d?\d)\b/;
-  const remoteSocketUrl = /wss?:\/\/(?!localhost|127\.0\.0\.1|your-server|example)[A-Za-z0-9.[]/;
+  // Loopback forms are local, not a baked-in server, so they are allowed here.
+  const remoteSocketUrl = /wss?:\/\/(?!localhost|127\.0\.0\.1|\[::1\]|your-server|example)[A-Za-z0-9.[]/;
   for (const [name, source] of shipped) {
     assert.doesNotMatch(source, ipLiteral, `${name} must not hardcode a server IP address`);
     assert.doesNotMatch(source, remoteSocketUrl, `${name} must not hardcode a signaling URL`);

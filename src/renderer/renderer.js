@@ -66,8 +66,18 @@ let quickConnectReady = false;
 // Single place that turns a stored setting into runtime behaviour. Also feeds the
 // shared engine, so signalDial()/fetchTurnCreds() can never reach an address that
 // did not pass validation here.
-function applySignalState(state) {
+// `interrupt` is set when the person just changed or removed the server. Any live
+// Quick Connect attempt belongs to the OLD server: its room, its socket and the
+// claim code on screen are all still redeemable there. Leaving them running would
+// mean the app says "removed" while a stranger with that code could still connect
+// through the server the user just walked away from.
+function applySignalState(state, { interrupt = false } = {}) {
   const ok = !!(state && state.ok);
+  if (interrupt) {
+    retireSenderQuickAttempt();
+    retireReceiverQuickAttempt();
+    $('quickCodeOut').textContent = '';   // never leave a dead code on screen
+  }
   quickConnectReady = ok;
   configureSignaling(ok ? state.value : '', { allowInsecure: false });
   // Sending still needs something picked — enabling a server must not imply a file.
@@ -1771,16 +1781,21 @@ $('btnServerToggle').onclick = () => {
 $('btnSaveServer').onclick = async () => {
   const state = await window.yshare.setSignalEndpoint($('serverIn').value).catch(() => null);
   if (!state) { setServerMsg('could not save that — try again', 'err'); return; }
-  applySignalState(state);
-  if (state.ok) setServerMsg('saved — quick connect is ready', 'ok');
-  else setServerMsg(state.reason || 'that address cannot be used', 'err');
+  applySignalState(state, { interrupt: true });
+  if (!state.ok) { setServerMsg(state.reason || 'that address cannot be used', 'err'); return; }
+  // stored === false means it works now but will not survive a restart.
+  setServerMsg(state.stored === false ? state.reason : 'saved — quick connect is ready',
+    state.stored === false ? 'err' : 'ok');
 };
 
 $('btnClearServer').onclick = async () => {
   const state = await window.yshare.clearSignalEndpoint().catch(() => null);
-  applySignalState(state);
+  applySignalState(state, { interrupt: true });
   $('serverIn').value = '';
-  setServerMsg('removed — manual codes still work with no server at all');
+  setServerMsg(state && state.stored === false
+    ? state.reason
+    : 'removed — manual codes still work with no server at all',
+  state && state.stored === false ? 'err' : '');
 };
 
 // --- footer version -----------------------------------------------------------

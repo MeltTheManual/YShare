@@ -170,10 +170,18 @@
   const SIGNAL_ENDPOINT_RE =
     /^(?:(wss|ws|https|http):\/\/)?([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::([0-9]{1,5}))?$/;
 
+  // Deliberately narrow: exactly the hosts the desktop Content-Security-Policy
+  // whitelists for cleartext (see src/renderer/index.html). Accepting a wider
+  // range here, such as the rest of the 127.x loopback block, would let an address save as
+  // "ready" and then be blocked at dial time with no explanation.
+  // IPv6 literals are deliberately absent: CSP's host-source grammar cannot
+  // express a bracketed IPv6 address, so `ws://[::1]:*` is rejected by the
+  // browser as an invalid source and silently ignored. Allowing it here would
+  // let such an address save as "ready" and then never dial. `localhost` already
+  // covers IPv6 loopback by name on any modern system.
   function isLoopbackHost(host) {
     const h = String(host || '').toLowerCase();
-    if (h === 'localhost' || h === '::1' || h === '[::1]') return true;
-    return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h);
+    return h === 'localhost' || h === '127.0.0.1';
   }
 
   function isValidSignalHost(host) {
@@ -270,7 +278,14 @@
     const iceServers = [
       { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
     ];
-    if (turn && turn.username && turn.credential && turn.urls && turn.urls.length) {
+    // The configured signaling server supplies these, so the shape is checked
+    // before handing anything to the WebRTC stack. A string `urls` would pass a
+    // bare truthiness test and reach the browser as a malformed ICE server.
+    if (turn
+      && typeof turn.username === 'string' && turn.username
+      && typeof turn.credential === 'string' && turn.credential
+      && Array.isArray(turn.urls) && turn.urls.length
+      && turn.urls.every(function (u) { return typeof u === 'string' && /^turns?:/i.test(u); })) {
       iceServers.push({ urls: turn.urls, username: turn.username, credential: turn.credential });
     }
     return { iceServers, iceTransportPolicy: 'all' }; // direct-first; relay last resort

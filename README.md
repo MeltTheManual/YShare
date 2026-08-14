@@ -1,7 +1,4 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
-  <img alt="YShare. Peer to peer file sharing. Send anything to anyone." src="docs/assets/hero-light.svg">
-</picture>
+<img alt="YShare. Send a file straight to someone. The file goes directly from your device to theirs, encrypted, with no account, no upload and no cloud copy." src="docs/assets/01-pitch.svg">
 
 ## Send a file straight to someone. No account. No upload. No cloud copy.
 
@@ -13,7 +10,7 @@ Windows and Android today. macOS, Linux and iOS later.
 
 <br>
 
-<img alt="Three steps. One: pick a file, or a whole folder, on your computer or your phone. Two: read out the six character code. Three: they see what it is and accept it." src="docs/assets/how-it-works.svg">
+<img alt="Three steps. One: you pick a file or a whole folder. Two: you get a six character code to read out. Three: they see what it is and accept. Then it transfers, checks itself and tells you the truth." src="docs/assets/02-how-it-works.svg">
 
 <br>
 
@@ -37,7 +34,7 @@ YShare cuts out the middle. There is no storage to fill up, no quota, no expirin
 
 <br>
 
-<img alt="Your file goes directly between the two devices, encrypted. Only a small introduction of a few kilobytes touches a server, and it never sees file data. YShare runs none of these servers." src="docs/assets/what-travels.svg">
+<img alt="Every byte of your file goes directly between the two devices. Only a few kilobytes of introduction touch a server, which never sees your file. YShare runs none of these servers." src="docs/assets/03-what-goes-where.svg">
 
 <br>
 
@@ -57,7 +54,7 @@ Setting one up: [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md)
 
 <br>
 
-<img alt="The file is cut into eight pieces that travel at the same time, then get rebuilt in order and checked with a SHA-256 hash." src="docs/assets/eight-lanes.svg">
+<img alt="The file is cut into eight pieces that all move at once, then get put back in order and checked with a SHA-256 hash before you are told it worked." src="docs/assets/04-why-quick.svg">
 
 <br>
 
@@ -145,4 +142,4 @@ Bug reports and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIB
 
 MIT. See [LICENSE](LICENSE).
 
-The bundled fonts (Instrument Serif, JetBrains Mono, Press Start 2P) are under the SIL Open Font License, and pako is MIT and Zlib. Full texts are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+The bundled fonts (Instrument Serif, JetBrains Mono, Press Start 2P, and Architects Daughter in the drawings above) are under the SIL Open Font License, and pako is MIT and Zlib. Full texts are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

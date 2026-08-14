@@ -253,10 +253,11 @@ function App(): React.JSX.Element {
   const recvTimerRef = useRef<any>(null);                  // receiver connect timeout
   // quick connect server — empty until the person sets one (nothing is baked in)
   const [signalValue, setSignalValue] = useState('');    // exactly what was typed/stored
-  const [signalReady, setSignalReady] = useState(false); // usable → quick connect allowed
   const [srvOpen, setSrvOpen] = useState(false);         // hero: edit box shown
   const [srvMsg, setSrvMsg] = useState('');              // plain-language result line
+  const [activeServer, setActiveServer] = useState('');  // the address actually in force
   const signalReadyRef = useRef(false);
+  const settingsLoadedRef = useRef(false);
   // quick connect (Stage 1d)
   const [quickCodeOut, setQuickCodeOut] = useState(''); // sender: 6-char code to show
   const [quickIn, setQuickIn] = useState('');           // receiver: 6-char code typed in
@@ -332,10 +333,17 @@ function App(): React.JSX.Element {
   const applySignal = useCallback((value: string) => {
     const res = configureSignaling(value, { allowInsecure: !!__DEV__ });
     signalReadyRef.current = res.ok && !!res.endpoint;
-    setSignalReady(signalReadyRef.current);
+    // What the hero line shows: the address actually in force, not whatever is
+    // half-typed in the box. Showing the typed text would claim a server is in
+    // use before it has been saved.
+    setActiveServer(res.ok && res.endpoint ? res.endpoint.display : '');
     return res;
   }, []);
 
+  // Reading the stored setting is asynchronous, so a tap during the first moments
+  // after launch could otherwise be told "no server" while a perfectly good one is
+  // still loading. Both quick paths await this barrier first. Same rule as the
+  // desktop's runtimeReady.
   useEffect(() => {
     let alive = true;
     readSignalSetting().then((value) => {
@@ -343,22 +351,34 @@ function App(): React.JSX.Element {
       setSignalValue(value);
       const res = applySignal(value);
       if (value && !res.ok) setSrvMsg(res.reason);
-    });
+    }).finally(() => { settingsLoadedRef.current = true; });
     return () => { alive = false; };
   }, [applySignal]);
+
+  function settingsReady(): Promise<void> {
+    return new Promise((resolve) => {
+      const tick = () => (settingsLoadedRef.current ? resolve() : setTimeout(tick, 25));
+      tick();
+    });
+  }
 
   async function saveServer() {
     const res = applySignal(signalValue);
     if (!res.ok) { setSrvMsg(res.reason); return; }
     const stored = await writeSignalSetting(signalValue.trim());
-    setSrvMsg(stored ? 'saved — quick connect is ready' : 'could not save that on this device');
+    // Usable now either way, but say plainly when it will not survive a restart.
+    setSrvMsg(stored
+      ? 'saved — quick connect is ready'
+      : 'saved for now, but this phone would not let YShare remember it');
   }
 
   async function removeServer() {
     setSignalValue('');
     applySignal('');
-    await writeSignalSetting('');
-    setSrvMsg('removed — manual codes still work with no server at all');
+    const stored = await writeSignalSetting('');
+    setSrvMsg(stored
+      ? 'removed — manual codes still work with no server at all'
+      : 'removed for now, but this phone would not let YShare forget it');
   }
 
   // "↺ New transfer": tear everything down and go back to the hero screen —
@@ -1328,6 +1348,7 @@ function App(): React.JSX.Element {
   async function getQuickCode() {
     if ((!pickedRef.current && !pickedFolderRef.current) || creatingRef.current) return;
     // Nothing is compiled in: without a server there is no room to open.
+    await settingsReady();
     if (!signalReadyRef.current) {
       setShowManual(true);
       setStatus('quick connect needs a server — set one on the home screen, or use the manual code');
@@ -1751,6 +1772,7 @@ function App(): React.JSX.Element {
       setStatus('enter the 6-character code');
       return;
     }
+    await settingsReady();
     if (!signalReadyRef.current) {
       setShowManual(true);
       setStatus('quick connect needs a server — set one on the home screen, or use the manual code');
@@ -1833,7 +1855,7 @@ function App(): React.JSX.Element {
             <View style={styles.srvBox}>
               <TouchableOpacity onPress={() => setSrvOpen(!srvOpen)} activeOpacity={0.7}>
                 <Text style={styles.srvLine}>
-                  QUICK CONNECT SERVER · <Text style={styles.srvValue}>{signalReady ? signalValue.trim() : 'NOT SET'}</Text>
+                  QUICK CONNECT SERVER · <Text style={styles.srvValue}>{activeServer || 'NOT SET'}</Text>
                   <Text style={styles.srvAction}>{srvOpen ? '   CLOSE' : '   CHANGE'}</Text>
                 </Text>
               </TouchableOpacity>

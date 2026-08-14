@@ -107,8 +107,16 @@ function loadSettings() {
   try { return JSON.parse(fs.readFileSync(settingsPath(), 'utf8')); } catch { return {}; }
 }
 
+// Returns whether the write actually landed. Callers that tell the user
+// something was saved MUST check this: claiming "saved" after a failed write
+// means the setting quietly disappears at the next launch.
 function saveSettings(s) {
-  try { fs.writeFileSync(settingsPath(), JSON.stringify(s, null, 2)); } catch {}
+  try {
+    fs.writeFileSync(settingsPath(), JSON.stringify(s, null, 2));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // The folder received files land in: the user's choice if it still exists,
@@ -176,15 +184,27 @@ trustedHandle('get-signal-endpoint', () => signalState(storedSignalValue()));
 trustedHandle('set-signal-endpoint', (_event, value) => {
   const state = signalState(typeof value === 'string' ? value : '');
   if (!state.ok) return state;                 // nothing is stored until it is valid
-  saveSettings({ ...loadSettings(), signalEndpoint: state.value });
-  return state;
+  if (!saveSettings({ ...loadSettings(), signalEndpoint: state.value })) {
+    // Usable right now, but it will not survive a restart. Say so instead of
+    // pretending, and leave the endpoint active for this session.
+    return { ...state, stored: false, reason: 'saved for now, but this device would not let YShare remember it' };
+  }
+  return { ...state, stored: true };
 });
 
 trustedHandle('clear-signal-endpoint', () => {
   const s = loadSettings();
   delete s.signalEndpoint;
-  saveSettings(s);
-  return { value: '', display: '', ok: false, reason: '' };
+  const stored = saveSettings(s);
+  return {
+    value: '',
+    display: '',
+    ok: false,
+    stored,
+    // A failed delete means the old address returns at the next launch. That is a
+    // privacy surprise, not a cosmetic one, so it must not be reported as removed.
+    reason: stored ? '' : 'removed for now, but this device would not let YShare forget it',
+  };
 });
 
 // ---------------------------------------------------------------------------
