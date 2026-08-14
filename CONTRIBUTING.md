@@ -75,6 +75,21 @@ is, not what the line does — the code already says that. Plain language is
 preferred everywhere, including in user-facing strings: the app is for people who
 do not know what NAT is.
 
+## If you are forking this to ship your own build
+
+Change the Android application ID in `mobile/android/app/build.gradle` before you build:
+
+```gradle
+applicationId "com.yourname.yshare"
+```
+
+It is `app.yshare` here, and an application ID is a global name. If you keep it, your build and the original
+cannot both be installed on the same phone, and you would not be able to publish yours to Google Play,
+because that ID belongs to the first account that publishes it.
+
+Sign your build with your own key, too — never with the debug key in this repository. Your key is what tells
+Android that an update really came from you.
+
 ## Reporting bugs
 
 Include your platform and version, both devices' networks (same Wi-Fi or not),
