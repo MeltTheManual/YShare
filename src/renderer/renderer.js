@@ -690,7 +690,10 @@ $('btnQuickSend').onclick = async () => {
   if (!picked && !pickedFolder) return;
   $('btnQuickSend').disabled = true;
   const attempt = startSenderQuickAttempt();
-  if (!await runtimeReady) {
+  // Wait for the first settings read, then judge the LIVE state: someone who just
+  // saved a server must not have to restart the app before Quick Connect works.
+  await runtimeReady;
+  if (!canQuickConnect()) {
     if (!senderQuickIsCurrent(attempt, null)) return;
     senderQuickGate.retire(attempt);
     unlockManual('manualSend');
@@ -788,7 +791,8 @@ $('btnCreateOffer').onclick = async () => {
   $('btnCreateOffer').disabled = true;
   setStatus('creating codes…', 'warn');
   try {
-    const serverReady = await runtimeReady;
+    await runtimeReady;
+    const serverReady = canQuickConnect();
     if (!senderQuickIsCurrent(attempt, null)) return;
     // With no configured server there is nowhere to ask for relay credentials —
     // the manual code is then direct/STUN-only, which still works for most pairs.
@@ -1594,7 +1598,10 @@ $('btnQuickJoin').onclick = async () => {
   if (code.length !== 6) { setStatus('enter the 6-character code', 'err'); return; }
   $('btnQuickJoin').disabled = true;
   const attempt = startReceiverQuickAttempt();
-  if (!await runtimeReady) {
+  // Wait for the first settings read, then judge the LIVE state: someone who just
+  // saved a server must not have to restart the app before Quick Connect works.
+  await runtimeReady;
+  if (!canQuickConnect()) {
     if (!receiverQuickIsCurrent(attempt, null)) return;
     receiverQuickGate.retire(attempt);
     unlockManual('manualRecv');
@@ -1684,7 +1691,8 @@ $('btnCreateAnswer').onclick = async () => {
   setStatus('creating reply…', 'warn');
   try {
     const offers = decodeCode($('offerIn').value);
-    const serverReady = await runtimeReady;
+    await runtimeReady;
+    const serverReady = canQuickConnect();
     if (!receiverQuickIsCurrent(attempt, null)) return;
     // No configured server → direct/STUN-only, which needs no infrastructure.
     const turn = serverReady ? await fetchTurnCreds() : null;

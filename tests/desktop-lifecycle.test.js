@@ -112,8 +112,16 @@ test('quick connect stays closed until a server is configured, on both entry poi
     'an address that fails validation must never reach settings.json');
   assert.match(renderer, /quickConnectReady = false;/,
     'the renderer must start closed so a failed settings read cannot open quick connect');
-  assert.equal((renderer.match(/if \(!await runtimeReady\)/g) || []).length, 2,
-    'both Quick Connect entry points must guard the network call internally');
+  assert.equal((renderer.match(/await runtimeReady;/g) || []).length, 4,
+    'every quick path must wait for the first settings read before judging');
+  // The gate reads LIVE state, never the value runtimeReady resolved to at startup.
+  // Regression: saving a server used to require an app restart before it worked.
+  assert.equal((renderer.match(/if \(!canQuickConnect\(\)\) \{/g) || []).length, 2,
+    'both Quick Connect entry points must check the current setting, not the startup snapshot');
+  assert.equal((renderer.match(/const serverReady = canQuickConnect\(\);/g) || []).length, 2,
+    'both manual paths must decide on relay credentials from the current setting');
+  assert.doesNotMatch(renderer, /await runtimeReady\s*\?|\bif \(!await runtimeReady\)/,
+    'the startup promise must not be used as the answer, only as a wait');
   assert.equal((renderer.match(/serverReady \? await fetchTurnCreds\(\) : null/g) || []).length, 2,
     'both manual paths must stay direct-only when no server is configured');
   assert.match(renderer,
