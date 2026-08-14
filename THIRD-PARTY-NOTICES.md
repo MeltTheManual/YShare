@@ -1,7 +1,8 @@
 # Third-party notices
 
-YShare bundles the fonts and libraries listed here. Each keeps its own license,
-which is reproduced in full below. YShare's own code is MIT — see LICENSE.
+The MIT licence in `LICENSE` covers YShare's own source code. The fonts and
+libraries bundled in this repository keep their own licences, reproduced in full
+below.
 
 ## Fonts
 
