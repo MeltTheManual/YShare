@@ -48,6 +48,9 @@ Being honest about the edges matters more than sounding strong:
   trusting that the person you gave the code to is the person who used it.
 - **A signaling server sees connection metadata.** Whoever runs the server you
   configure can see that two addresses met and when. It never sees file bytes.
+- **The chat carrying a Serverless Link sees the message.** The connector stays
+  after `#`, so the static opening page does not receive it in the HTTP request.
+  WhatsApp or another service used to send the link can still see that message.
 - **A relay operator carries your encrypted bytes.** They cannot read them, but
   they can see that traffic flowed.
 - **Malicious file content is not scanned.** YShare delivers exactly what the
@@ -66,4 +69,4 @@ Being honest about the edges matters more than sounding strong:
 
 ## Supported versions
 
-YShare is pre-1.0. Only the latest commit on `main` receives fixes.
+Only the latest commit on `main` receives fixes.

@@ -466,7 +466,7 @@
   </div>
 
   <!-- Quick connect server: YShare runs none of its own, so this is the person's
-       own choice. Manual codes work with this left empty. -->
+       own choice. Serverless connection links work with this left empty. -->
   <div class="server" id="serverBox">
     <div class="srv-line">
       <span id="srvSummary">Quick connect server · <b>not set</b></span>
@@ -477,7 +477,7 @@
       <div class="hint">
         YShare has no server of its own. Nothing you send passes through us. The 6-character
         code needs a small connect-me service to introduce the two devices. Run your own
-        (see SELF-HOSTING.md) or paste one you trust. Leave it empty to use Manual Connect
+        (see SELF-HOSTING.md) or paste one you trust. Leave it empty to use a serverless connection link
         without a Quick Connect server. Without TURN, the devices still need a direct path.
       </div>
       <input type="text" id="serverIn" placeholder="wss://your-server.example:8443" spellcheck="false" />
@@ -517,16 +517,16 @@
         <!-- renderer.js writes the raw code here; presentation mirrors it into the ticket tiles -->
         <div id="quickCodeOut" style="display:none"></div>
       </div>
-      <!-- manual fallback: hidden unless quick connect fails (owner decision 2026-07-09) -->
+      <!-- serverless fallback: hidden unless quick connect fails -->
       <div class="step" id="manualSend" style="display:none">
-        <div class="mono-note">Manual fallback</div>
-        <h3>Create your connection code</h3>
-        <div class="hint">If quick connect is unavailable: send this long code to the receiver yourself.</div>
-        <button class="act" id="btnCreateOffer" disabled>Create code</button>
-        <textarea id="offerOut" readonly placeholder="(your code appears here)"></textarea>
-        <button class="ghost" id="btnCopyOffer">Copy code</button>
-        <div class="hint" style="margin-top:12px">…then paste their reply code here and connect:</div>
-        <textarea id="answerIn" placeholder="(paste the reply code here)"></textarea>
+        <div class="mono-note">Serverless connection</div>
+        <h3>Create a private connection link</h3>
+        <div class="hint">Create the link, then paste it into WhatsApp or another chat. The receiver taps it to open YShare.</div>
+        <button class="act" id="btnCreateOffer" disabled>Create share link</button>
+        <textarea id="offerOut" readonly style="display:none"></textarea>
+        <button class="ghost" id="btnShareOffer" style="display:none">Share connection</button>
+        <div class="hint" style="margin-top:12px">When the receiver sends their reply link, open it or paste it here:</div>
+        <textarea id="answerIn" placeholder="(paste the reply link here)"></textarea>
         <button class="act" id="btnConnectSend" disabled>Connect &amp; send</button>
       </div>
       <div class="step endstep">
@@ -577,15 +577,15 @@
           <button class="act" id="btnQuickJoin" disabled>Connect</button>
         </div>
       </div>
-      <!-- manual fallback: hidden unless quick connect fails (owner decision 2026-07-09) -->
+      <!-- serverless fallback: hidden unless quick connect fails -->
       <div class="step" id="manualRecv" style="display:none">
-        <div class="mono-note">Manual fallback</div>
-        <h3>Paste the sender's code</h3>
-        <textarea id="offerIn" placeholder="(paste the sender's code here)"></textarea>
-        <div class="hint">Click create, then copy the reply code and send it back (WhatsApp, etc.).</div>
-        <button class="act" id="btnCreateAnswer">Create reply code</button>
-        <textarea id="answerOut" readonly placeholder="(your reply code appears here)"></textarea>
-        <button class="ghost" id="btnCopyAnswer">Copy reply code</button>
+        <div class="mono-note">Serverless connection</div>
+        <h3>Open the sender's connection link</h3>
+        <textarea id="offerIn" placeholder="(the sender's link appears here)"></textarea>
+        <div class="hint">Create a reply link and send it back. No Quick Connect server is needed.</div>
+        <button class="act" id="btnCreateAnswer">Create reply link</button>
+        <textarea id="answerOut" readonly style="display:none"></textarea>
+        <button class="ghost" id="btnShareAnswer" style="display:none">Share reply</button>
       </div>
       <div class="step">
         <h3><span class="stepno">2.</span>Deliver to</h3>

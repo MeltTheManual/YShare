@@ -28,6 +28,38 @@ test('connector codes round-trip exactly eight current descriptions', () => {
   assert.throws(() => engine.validateDescriptionArray(descriptions('answer'), 'offer'), /wrong session/i);
 });
 
+test('serverless connection links round-trip offers and answers without exposing the connector to HTTP', () => {
+  const offerCode = engine.encodeDescs(descriptions('offer'));
+  const answerCode = engine.encodeDescs(descriptions('answer'));
+  const offerLink = engine.createConnectionLink('offer', offerCode);
+  const answerLink = engine.createConnectionLink('answer', answerCode);
+
+  assert.match(offerLink, /^https:\/\/meltthemanual\.github\.io\/YShare\/connect\/#v1\/offer\//);
+  assert.equal(new URL(offerLink).hash.includes('YS1.'), true);
+  assert.deepEqual(engine.parseConnectionLink(offerLink), { kind: 'offer', code: offerCode });
+  assert.deepEqual(engine.parseConnectionLink(answerLink), { kind: 'answer', code: answerCode });
+
+  const appLink = engine.APP_LINK_BASE + offerLink.slice(offerLink.indexOf('#'));
+  assert.deepEqual(engine.parseConnectionLink(appLink), { kind: 'offer', code: offerCode });
+  assert.equal(engine.parseConnectionLink('https://example.com/#v1/offer/' + offerCode), null);
+  assert.equal(engine.parseConnectionLink('javascript:alert(1)'), null);
+  assert.throws(() => engine.createConnectionLink('answer', offerCode), /wrong session/i);
+});
+
+test('a valid early receiver acknowledgement waits for local send completion', () => {
+  const message = { tid: 'transfer-123', ok: true };
+  assert.equal(engine.completionAckAction(
+    { sending: true, localComplete: false, pending: false }, message, 'transfer-123'), 'queue');
+  assert.equal(engine.completionAckAction(
+    { sending: true, localComplete: true, pending: false }, message, 'transfer-123'), 'finish');
+  assert.equal(engine.completionAckAction(
+    { sending: true, localComplete: false, pending: true }, message, 'transfer-123'), 'reject');
+  assert.equal(engine.completionAckAction(
+    { sending: true, localComplete: false, pending: false }, { tid: 'other', ok: true }, 'transfer-123'), 'reject');
+  assert.equal(engine.completionAckAction(
+    { sending: true, localComplete: false, pending: false }, { tid: 'transfer-123', ok: 'yes' }, 'transfer-123'), 'reject');
+});
+
 test('compressed connector codes stop at a bounded expansion size', () => {
   const pako = require('../shared/vendor/pako.min.js');
   const oversized = JSON.stringify(['x'.repeat(engine.PROTOCOL_LIMITS.maxSdpChars * engine.NUM_CONNS + 1)]);

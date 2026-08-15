@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>Open YShare</title>
+  <style>
+    :root { color-scheme: light; --paper:#f4eee1; --card:#fbf7ec; --ink:#26221c; --body:#55493a; --orange:#d4551f; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:24px; background:var(--paper); color:var(--ink); font-family:Georgia,serif; }
+    main { width:min(560px,100%); border:1px solid var(--ink); background:var(--card); padding:32px; box-shadow:8px 8px 0 var(--ink); }
+    .kicker { margin:0 0 12px; font:700 11px/1.4 monospace; letter-spacing:2px; text-transform:uppercase; color:var(--body); }
+    h1 { margin:0 0 12px; font-size:44px; font-weight:400; }
+    h1 span { color:var(--orange); font-style:italic; }
+    p { margin:0 0 18px; font-size:18px; line-height:1.5; color:var(--body); }
+    button { width:100%; border:1px solid var(--ink); background:var(--orange); color:white; padding:15px 18px; font:700 12px/1 monospace; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; }
+    button:disabled { cursor:not-allowed; background:#a2947e; }
+    .small { margin:18px 0 0; font:12px/1.5 monospace; }
+    a { color:var(--orange); }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="kicker">Private device connection</p>
+    <h1>Open <span>YShare</span></h1>
+    <p id="message">Checking this connection link.</p>
+    <button id="open" type="button" disabled>Open YShare</button>
+    <p class="small">The connection details stay after the # in this address, so they are not sent to this webpage. The chat used to send the link can still see the message.</p>
+    <p class="small"><a href="https://github.com/MeltTheManual/YShare">View the YShare source</a></p>
+  </main>
+  <script>
+    (function () {
+      'use strict';
+      var button = document.getElementById('open');
+      var message = document.getElementById('message');
+      var route = location.hash.slice(1);
+      var valid = /^v1\/(offer|answer)\/[A-Za-z0-9._-]+$/.test(route) && route.length <= 1048600;
+      if (!valid) {
+        message.textContent = 'This connection link is invalid or incomplete. Ask the other person to create a new one.';
+        return;
+      }
+      var appUrl = 'yshare://connect/#' + route;
+      var openApp = function () { location.href = appUrl; };
+      button.disabled = false;
+      button.addEventListener('click', openApp);
+      message.textContent = 'YShare should open with the connection ready. If it does not open automatically, press the button.';
+      setTimeout(openApp, 150);
+    })();
+  </script>
+</body>
+</html>

@@ -14,10 +14,46 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const { isExpectedRendererUrl, isTrustedRendererEvent } = require('./main-security');
+const engine = require('../shared/engine.js');
 
 const rendererEntryPath = path.join(__dirname, 'renderer', 'index.html');
 const rendererEntryUrl = pathToFileURL(rendererEntryPath).href;
 let trustedWebContents = null;
+let mainWindow = null;
+let pendingConnectionUrl = null;
+
+function connectionUrlFromArgv(argv) {
+  for (const value of Array.isArray(argv) ? argv : []) {
+    if (typeof value !== 'string' || !value.startsWith(engine.APP_LINK_BASE)) continue;
+    try {
+      if (engine.parseConnectionLink(value)) return value;
+    } catch {}
+  }
+  return null;
+}
+
+function deliverConnectionUrl(value) {
+  try {
+    if (!engine.parseConnectionLink(value)) return false;
+  } catch {
+    return false;
+  }
+  pendingConnectionUrl = value;
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoading()) {
+    mainWindow.webContents.send('connection-link', pendingConnectionUrl);
+    pendingConnectionUrl = null;
+  }
+  return true;
+}
+
+function registerConnectionProtocol() {
+  if (process.env.YSHARE_TEST_HIDDEN === '1' || process.env.YSHARE_TEST_OFFSCREEN === '1') return;
+  if (process.defaultApp && process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('yshare', process.execPath, [path.resolve(process.argv[1])]);
+  } else {
+    app.setAsDefaultProtocolClient('yshare');
+  }
+}
 
 function trustedHandle(channel, listener) {
   ipcMain.handle(channel, (event, ...args) => {
@@ -43,9 +79,11 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
+  mainWindow = win;
   trustedWebContents = win.webContents;
   win.webContents.once('destroyed', () => {
     if (trustedWebContents === win.webContents) trustedWebContents = null;
+    if (mainWindow === win) mainWindow = null;
   });
   const blockUnexpectedNavigation = (event, legacyUrl) => {
     const targetUrl = typeof legacyUrl === 'string' ? legacyUrl : event && event.url;
@@ -65,6 +103,11 @@ function createWindow() {
     win.once('ready-to-show', () => win.show());
   }
   win.loadFile(rendererEntryPath);
+  win.webContents.once('did-finish-load', () => {
+    if (!pendingConnectionUrl) return;
+    win.webContents.send('connection-link', pendingConnectionUrl);
+    pendingConnectionUrl = null;
+  });
 
   // A renderer reload normally asks us to clean up first, but closing the window,
   // a renderer crash, or an OS shutdown can bypass renderer JavaScript entirely.
@@ -82,12 +125,36 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
-  createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  const initialConnectionUrl = connectionUrlFromArgv(process.argv);
+  if (initialConnectionUrl) pendingConnectionUrl = initialConnectionUrl;
+
+  app.on('second-instance', (_event, argv) => {
+    const value = connectionUrlFromArgv(argv);
+    if (!value || !deliverConnectionUrl(value)) return;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
   });
-});
+
+  app.on('open-url', (event, value) => {
+    event.preventDefault();
+    deliverConnectionUrl(value);
+  });
+
+  app.whenReady().then(() => {
+    registerConnectionProtocol();
+    createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
@@ -154,8 +221,6 @@ trustedHandle('reset-download-dir', () => {
 // Validation lives in the shared engine so desktop and Android agree on exactly
 // which addresses are acceptable. Cleartext ws:// is allowed only to loopback,
 // which is also all the renderer's Content-Security-Policy permits.
-const engine = require('../shared/engine.js');
-
 function storedSignalValue() {
   const s = loadSettings();
   return typeof s.signalEndpoint === 'string' ? s.signalEndpoint : '';

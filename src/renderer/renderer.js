@@ -22,6 +22,8 @@ const {
   CONNECTION_FAILURE_HELP,
   buildRtcConfig, fetchTurnCreds, signalDial, configureSignaling,
   encodeDescs, decodeCode, connRange, waitIceComplete,
+  createConnectionLink, parseConnectionLink,
+  completionAckAction,
   passwordProof, newTransferId,
   validateOfferFile, validateOfferFolder, validateFileMeta, validateFolderMeta,
   validateDescriptionArray,
@@ -52,15 +54,23 @@ function fmtEta(secs) {
   return `${Math.floor(m / 60)}h ${m % 60}m left`;
 }
 
-// Manual fallback stays hidden unless quick connect actually fails (owner
-// decision 2026-07-09): insurance, not a feature.
+// The serverless fallback stays hidden unless Quick Connect is unavailable.
 function unlockManual(which) {
   $(which).style.display = '';
 }
 
+function connectorFromInput(value, expectedKind) {
+  const raw = String(value || '').trim();
+  let parsed = null;
+  try { parsed = parseConnectionLink(raw); } catch {}
+  if (!parsed) return raw;
+  if (parsed.kind !== expectedKind) throw new Error('wrong connection link kind');
+  return parsed.code;
+}
+
 // No server address is compiled into YShare. Quick Connect is available only when
 // this install points at a signaling server the person chose themselves; until
-// then the app falls back to manual codes, which need no Quick Connect server.
+// then the app falls back to shareable connection links, which need no Quick Connect server.
 // Default to the closed state while main answers, so an IPC failure cannot open it.
 let quickConnectReady = false;
 
@@ -98,8 +108,8 @@ const runtimeReady = window.yshare.getSignalEndpoint()
     if (!ok) {
       setStatus(
         (state && state.reason)
-          ? state.reason + ' — manual direct connection is available'
-          : 'no quick connect server set — manual direct connection is available',
+          ? state.reason + '. A serverless connection link is available.'
+          : 'No Quick Connect server is set. A serverless connection link is available.',
         'warn',
       );
     }
@@ -107,7 +117,7 @@ const runtimeReady = window.yshare.getSignalEndpoint()
   })
   .catch(() => {
     applySignalState(null);
-    setStatus('could not read your settings — manual direct connection is available', 'warn');
+    setStatus('Could not read your settings. A serverless connection link is available.', 'warn');
     return false;
   });
 
@@ -173,7 +183,7 @@ function newSenderState() {
     pcs: [], dcs: [], ctrl: null,
     tid: '', pw: '', attemptsLeft: PASSWORD_ATTEMPTS,
     sending: false, cancelled: false, finished: false, terminal: false,
-    localSendComplete: false, readClosePromise: null,
+    localSendComplete: false, pendingAck: null, readClosePromise: null,
     sent: 0, t0: 0,
     connectTimer: null,
     sig: null,
@@ -408,22 +418,48 @@ function onSenderMsg(e, connectionIndex, owner) {
       setTimeout(() => senderTeardown(owner), 200);
     }
   } else if (m.type === 'ack') {
-    if (!owner.sending || !owner.localSendComplete || typeof m.ok !== 'boolean') {
-      failSenderProtocol('the completion message was invalid or arrived before the local send completed.', owner);
-      return;
-    }
-    owner.finished = true;
-    owner.terminal = true;
-    senderFlowEnded(owner);
-    const what = owner.payload && owner.payload.kind === 'folder' ? 'folder' : 'file';
-    showSendResult(m.ok, m.ok
-      ? `Receiver verified the ${what} ✓ — transfer complete.`
-      : `Receiver could not save or verify the ${what}${m.reason ? `: ${String(m.reason).slice(0, 180)}` : '.'}`);
-    setStatus(m.ok ? 'done ✓' : 'receiver reported failure', m.ok ? 'on' : 'err');
-    senderTeardown(owner);
+    receiveSenderAck(m, owner);
   } else {
     failSenderProtocol('the receiver sent an unknown response.', owner);
   }
+}
+
+function finishSenderAck(m, owner) {
+  if (!senderIsActive(owner) || !owner.localSendComplete) return;
+  owner.pendingAck = null;
+  owner.finished = true;
+  owner.terminal = true;
+  senderFlowEnded(owner);
+  const what = owner.payload && owner.payload.kind === 'folder' ? 'folder' : 'file';
+  showSendResult(m.ok, m.ok
+    ? `Receiver verified the ${what} ✓. Transfer complete.`
+    : `Receiver could not save or verify the ${what}${m.reason ? `: ${String(m.reason).slice(0, 180)}` : '.'}`);
+  setStatus(m.ok ? 'done ✓' : 'receiver reported failure', m.ok ? 'on' : 'err');
+  senderTeardown(owner);
+}
+
+function receiveSenderAck(m, owner) {
+  const action = completionAckAction({
+    sending: owner.sending,
+    localComplete: owner.localSendComplete,
+    pending: !!owner.pendingAck,
+  }, m, owner.tid);
+  if (action === 'reject') {
+    failSenderProtocol('the completion message was invalid or duplicated.', owner);
+    return;
+  }
+  if (action === 'queue') {
+    owner.pendingAck = { ok: m.ok, reason: m.reason };
+    return;
+  }
+  finishSenderAck(m, owner);
+}
+
+function markLocalSendComplete(owner) {
+  assertSenderActive(owner);
+  owner.localSendComplete = true;
+  if (owner.pendingAck) finishSenderAck(owner.pendingAck, owner);
+  else setStatus('sent, waiting for receiver to verify', 'on');
 }
 
 function showSendResult(ok, text) {
@@ -572,8 +608,7 @@ async function startSending(owner = S) {
     assertSenderActive(owner);
     await Promise.all(owner.dcs.map((dc) => flush(dc, () => !senderIsActive(owner))));
     assertSenderActive(owner);
-    owner.localSendComplete = true;
-    setStatus('sent — waiting for receiver to verify', 'on');
+    markLocalSendComplete(owner);
   } catch (err) {
     // Source file gone/unreadable mid-transfer, or a channel died under us.
     if (senderIsCurrent(owner) && !owner.cancelled && !owner.finished && !owner.terminal) {
@@ -631,8 +666,7 @@ async function startSendingFolder(owner = S) {
     senderCtrlSend({ type: 'folder-sent', tid: owner.tid, count: files.length }, owner);
     await flush(owner.ctrl, () => !senderIsActive(owner));
     assertSenderActive(owner);
-    owner.localSendComplete = true;
-    setStatus('sent — waiting for receiver to verify', 'on');
+    markLocalSendComplete(owner);
   } catch (err) {
     if (senderIsCurrent(owner) && !owner.cancelled && !owner.finished && !owner.terminal) {
       owner.cancelled = true;
@@ -708,7 +742,7 @@ $('btnQuickSend').onclick = async () => {
     if (!senderQuickIsCurrent(attempt, null)) return;
     senderQuickGate.retire(attempt);
     unlockManual('manualSend');
-    setStatus('quick connect needs a server — set one on the home screen, or use the manual code below', 'warn');
+    setStatus('Quick Connect needs a server. Set one on the home screen, or use the serverless link below.', 'warn');
     return;
   }
   if (!senderQuickIsCurrent(attempt, null)) return;
@@ -720,7 +754,7 @@ $('btnQuickSend').onclick = async () => {
   } catch (e) {
     if (!senderQuickIsCurrent(attempt, null)) return;
     senderQuickGate.retire(attempt);
-    setStatus('quick connect unavailable — manual codes unlocked below', 'err');
+    setStatus('Quick Connect is unavailable. The serverless connection is unlocked below.', 'err');
     unlockManual('manualSend');
     $('btnQuickSend').disabled = !canQuickConnect();
     return;
@@ -785,7 +819,7 @@ $('btnQuickSend').onclick = async () => {
       if (!senderQuickIsCurrent(attempt, sig)) return;
       senderQuickGate.retire(attempt);
       if (attempt.owner) abandonSenderAttempt(attempt.owner);
-      setStatus('quick connect failed — manual codes unlocked below', 'err');
+      setStatus('Quick Connect failed. The serverless connection is unlocked below.', 'err');
       unlockManual('manualSend');
       $('btnQuickSend').disabled = !canQuickConnect();
     } finally {
@@ -796,7 +830,7 @@ $('btnQuickSend').onclick = async () => {
   sig.send({ t: 'create' });
 };
 
-// --- manual fallback (sender) -------------------------------------------------
+// --- serverless fallback (sender) ---------------------------------------------
 $('btnCreateOffer').onclick = async () => {
   const attempt = startSenderQuickAttempt();
   $('btnCreateOffer').disabled = true;
@@ -806,14 +840,15 @@ $('btnCreateOffer').onclick = async () => {
     const serverReady = canQuickConnect();
     if (!senderQuickIsCurrent(attempt, null)) return;
     // With no configured server there is nowhere to ask for relay credentials —
-    // the manual code is then direct/STUN-only, which still works for most pairs.
+    // the connection link is then direct/STUN-only, which still works for most pairs.
     const turn = serverReady ? await fetchTurnCreds() : null;
     if (!senderQuickIsCurrent(attempt, null)) return;
     const code = await buildOffers(buildRtcConfig(turn), attempt);
     if (!senderQuickIsCurrent(attempt, null)) return;
     $('offerOut').value = code;
+    $('btnShareOffer').style.display = '';
     $('btnConnectSend').disabled = false;
-    setStatus('code created — send it to the receiver' + (turn ? '' : ' (direct connection only)'), 'warn');
+    setStatus('Connection link ready. Share it with the receiver' + (turn ? '.' : ' (direct connection only).'), 'warn');
     senderQuickGate.retire(attempt);
   } catch (err) {
     if (!senderQuickIsCurrent(attempt, null)) return;
@@ -825,15 +860,23 @@ $('btnCreateOffer').onclick = async () => {
   }
 };
 
-$('btnCopyOffer').onclick = () => navigator.clipboard.writeText($('offerOut').value);
+$('btnShareOffer').onclick = async () => {
+  try {
+    const link = createConnectionLink('offer', $('offerOut').value);
+    await navigator.clipboard.writeText(link);
+    setStatus('Connection link copied. Paste it into WhatsApp or another chat.', 'warn');
+  } catch {
+    setStatus('Could not copy the connection link. Create it again.', 'err');
+  }
+};
 
 $('btnConnectSend').onclick = async () => {
   $('btnConnectSend').disabled = true;   // guard against double-click
   try {
     const owner = S;
-    await applyAnswers(decodeCode($('answerIn').value), owner);
+    await applyAnswers(decodeCode(connectorFromInput($('answerIn').value, 'answer')), owner);
   } catch (err) {
-    setStatus("that reply code doesn't look right — copy it again and paste the whole thing", 'err');
+    setStatus("That reply link doesn't look right. Open it again or paste the whole link.", 'err');
     $('btnConnectSend').disabled = false;
   }
 };
@@ -1138,7 +1181,7 @@ function maybeFinalizeFolder(owner) {
 }
 
 // Answer a decoded offers array with the given RTC config; returns the encoded
-// reply code. Shared by the manual and quick flows.
+// reply connector. Shared by the serverless and Quick Connect flows.
 async function answerOffers(offers, rtcConfig, quickAttempt = null) {
   if (quickAttempt) {
     if (!receiverQuickIsCurrent(quickAttempt, quickAttempt.socket)) throw new Error('quick attempt was replaced');
@@ -1616,7 +1659,7 @@ $('btnQuickJoin').onclick = async () => {
     if (!receiverQuickIsCurrent(attempt, null)) return;
     receiverQuickGate.retire(attempt);
     unlockManual('manualRecv');
-    setStatus('quick connect needs a server — set one on the home screen, or use the manual code below', 'warn');
+    setStatus('Quick Connect needs a server. Set one on the home screen, or use the serverless link below.', 'warn');
     return;
   }
   if (!receiverQuickIsCurrent(attempt, null)) return;
@@ -1627,7 +1670,7 @@ $('btnQuickJoin').onclick = async () => {
   } catch (e) {
     if (!receiverQuickIsCurrent(attempt, null)) return;
     receiverQuickGate.retire(attempt);
-    setStatus('quick connect unavailable — manual codes unlocked below', 'err');
+    setStatus('Quick Connect is unavailable. The serverless connection is unlocked below.', 'err');
     unlockManual('manualRecv');
     $('btnQuickJoin').disabled = !canQuickConnect();
     return;
@@ -1684,7 +1727,7 @@ $('btnQuickJoin').onclick = async () => {
       if (!receiverQuickIsCurrent(attempt, sig)) return;
       receiverQuickGate.retire(attempt);
       if (attempt.owner) abandonReceiverAttempt(attempt.owner);
-      setStatus('quick connect failed — manual codes unlocked below', 'err');
+      setStatus('Quick Connect failed. The serverless connection is unlocked below.', 'err');
       unlockManual('manualRecv');
       $('btnQuickJoin').disabled = !canQuickConnect();
     } finally {
@@ -1695,13 +1738,13 @@ $('btnQuickJoin').onclick = async () => {
   sig.send({ t: 'join', code });
 };
 
-// --- manual fallback (receiver) -----------------------------------------------
+// --- serverless fallback (receiver) -------------------------------------------
 $('btnCreateAnswer').onclick = async () => {
   const attempt = startReceiverQuickAttempt();
   $('btnCreateAnswer').disabled = true;   // guard against double-click while creating
   setStatus('creating reply…', 'warn');
   try {
-    const offers = decodeCode($('offerIn').value);
+    const offers = decodeCode(connectorFromInput($('offerIn').value, 'offer'));
     await runtimeReady;
     const serverReady = canQuickConnect();
     if (!receiverQuickIsCurrent(attempt, null)) return;
@@ -1711,19 +1754,64 @@ $('btnCreateAnswer').onclick = async () => {
     const answer = await answerOffers(offers, buildRtcConfig(turn), attempt);
     if (!receiverQuickIsCurrent(attempt, null)) return;
     $('answerOut').value = answer;
-    setStatus('reply created — send it back to the sender' + (turn ? '' : ' (direct connection only)'), 'warn');
+    $('btnShareAnswer').style.display = '';
+    setStatus('Reply link ready. Share it back with the sender' + (turn ? '.' : ' (direct connection only).'), 'warn');
     receiverQuickGate.retire(attempt);
   } catch (err) {
     if (!receiverQuickIsCurrent(attempt, null)) return;
     receiverQuickGate.retire(attempt);
     if (attempt.owner) abandonReceiverAttempt(attempt.owner);
-    setStatus("that code doesn't look right — copy it again and paste the whole thing", 'err');
+    setStatus("That connection link doesn't look right. Open it again or paste the whole link.", 'err');
   } finally {
     $('btnCreateAnswer').disabled = false;
   }
 };
 
-$('btnCopyAnswer').onclick = () => navigator.clipboard.writeText($('answerOut').value);
+$('btnShareAnswer').onclick = async () => {
+  try {
+    const link = createConnectionLink('answer', $('answerOut').value);
+    await navigator.clipboard.writeText(link);
+    setStatus('Reply link copied. Paste it back into the chat.', 'warn');
+  } catch {
+    setStatus('Could not copy the reply link. Create it again.', 'err');
+  }
+};
+
+function importConnectionLink(value) {
+  let parsed;
+  try { parsed = parseConnectionLink(value); } catch {}
+  if (!parsed) {
+    setStatus('that YShare connection link is invalid or incomplete', 'err');
+    return;
+  }
+  if (parsed.kind === 'offer') {
+    if (S || R) {
+      setStatus('finish the current connection before opening another one', 'err');
+      return;
+    }
+    $('modeRecv').click();
+    unlockManual('manualRecv');
+    $('offerIn').value = parsed.code;
+    setStatus('Connection link ready. Click Create reply link.', 'warn');
+    return;
+  }
+  if (R || (S && (S.sending || S.finished || S.cancelled))) {
+    setStatus('Finish the current connection before opening another one.', 'err');
+    return;
+  }
+  $('modeSend').click();
+  unlockManual('manualSend');
+  $('answerIn').value = parsed.code;
+  if (!S || !Array.isArray(S.pcs) || S.pcs.length !== NUM_CONNS) {
+    $('btnConnectSend').disabled = true;
+    setStatus('open this reply on the sender device while its original connection is still waiting', 'err');
+    return;
+  }
+  $('btnConnectSend').disabled = false;
+  setStatus('Reply link ready. Click Connect & send.', 'warn');
+}
+
+window.yshare.onConnectionLink(importConnectionLink);
 
 // --- progress ---------------------------------------------------------------
 // Repaint throttled to ~4x/sec — repainting on every 64K chunk (hundreds/sec)
@@ -1795,7 +1883,7 @@ $('btnClearServer').onclick = async () => {
   $('serverIn').value = '';
   setServerMsg(state && state.stored === false
     ? state.reason
-    : 'removed. Manual Connect still works without a Quick Connect server',
+    : 'removed. Serverless connection links still work without a Quick Connect server',
   state && state.stored === false ? 'err' : '');
 };
 
