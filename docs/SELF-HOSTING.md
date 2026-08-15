@@ -4,6 +4,9 @@ YShare does not run a server for you. The apps ship with no address in them, so
 Quick Connect (the 6-character code) stays switched off until you point YShare at
 a server you control or trust.
 
+**You do not edit YShare's code to add a server.** Run the included service, then
+paste its `wss://` address into the Quick connect server setting on both devices.
+
 **You may not need one at all.** Every YShare build can transfer files using the
 manual connection codes, which need no server whatsoever. Quick Connect exists
 purely to save you from copying a long code by hand.

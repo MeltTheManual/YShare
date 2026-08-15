@@ -41,6 +41,12 @@ Some network pairs cannot connect directly. In that case, a TURN relay can forwa
 The relay carries bytes but still does not keep a cloud copy. Relay bandwidth costs money, so YShare ships
 with no server address and no owner-funded service.
 
+<img alt="Three network cases: devices on the same network connect directly, devices on different networks connect directly when possible, and a TURN relay forwards encrypted traffic only when the direct path is blocked." src="docs/assets/readme-network-paths-v1.png">
+
+Adding your own server does not require changing YShare's code. Run the included service, paste its
+`wss://` address into the **Quick connect server** setting on both devices, and save. Start with signaling
+only. Add TURN later only if the networks you use cannot connect directly.
+
 You have two ways to connect:
 
 - **Quick Connect:** enter the address of a YShare server you run or trust, then use a six-character code.
