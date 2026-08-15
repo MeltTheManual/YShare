@@ -273,7 +273,9 @@ an empty public folder item through the file-publication path.
 The main/release manifest sets `usesCleartextTraffic="false"`; only the debug manifest overlay allows
 cleartext, which is what makes a `ws://localhost` test server usable over `adb reverse` during development.
 Release Gradle tasks fail without four external signing environment variables and never fall back to the
-tracked debug keystore. `com.ysharemobile` and minSdk 24 remain provisional decisions.
+tracked debug keystore. The public Android application ID is `app.yshare`. The internal Kotlin namespace
+remains `com.ysharemobile`, which is normal and not user-visible. minSdk 24 remains provisional because the
+current public Downloads path requires Android 10 / API 29 or newer.
 
 Normal React Native debug APKs do not embed the JavaScript bundle and require Metro. Release APKs bundle JS
 and Gradle requires real external signing. A release build therefore reaches a `wss://` server only, and
@@ -320,6 +322,6 @@ Automated checks do not replace real storage/network tests, and a debug APK does
 - Android public Downloads currently requires API 29+ even though install minSdk remains 24.
 - Android folder publication cannot be transactionally rolled back through MediaStore.
 - Empty Android folder receive is unsupported.
-- Final Android application ID and signing identity, and the desktop code-signing/update story, are still
-  open — both must be settled before any binary is distributed.
+- Android release signing is still open. The application ID is settled as `app.yshare`, and Windows builds
+  will ship unsigned with an honest SmartScreen explanation and a published SHA-256 checksum.
 - Resume/retry, multi-recipient transfer, and more advanced folder scheduling remain future work.

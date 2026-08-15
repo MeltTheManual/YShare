@@ -15,7 +15,6 @@ this repository.
 | Instrument Serif (Regular, Italic) | Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif) | desktop `src/renderer/fonts/` (woff2), Android `mobile/assets/fonts/` and `mobile/android/app/src/main/assets/fonts/` (ttf) |
 | JetBrains Mono (Regular, Bold) | Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono) | same locations |
 | Press Start 2P (Regular) | Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net), with Reserved Font Name "Press Start 2P" | Android assets only; a leftover from an earlier interface that is still linked by the native projects and no longer drawn |
-| Architects Daughter (Regular) | Copyright (c) 2010, Kimberly Geswein (kimberlygeswein.com) | Not shipped in either app. A Latin subset is embedded as base64 inside the README diagrams in `docs/assets/*.svg`, so that the handwriting renders the same for every reader without loading anything from the network |
 
 The SIL Open Font License requires that these fonts are never sold on their own,
 that any modified version is not released under the reserved font names above,
