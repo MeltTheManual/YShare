@@ -60,7 +60,7 @@ function unlockManual(which) {
 
 // No server address is compiled into YShare. Quick Connect is available only when
 // this install points at a signaling server the person chose themselves; until
-// then the app falls back to manual codes, which need no server at all.
+// then the app falls back to manual codes, which need no Quick Connect server.
 // Default to the closed state while main answers, so an IPC failure cannot open it.
 let quickConnectReady = false;
 
@@ -1795,7 +1795,7 @@ $('btnClearServer').onclick = async () => {
   $('serverIn').value = '';
   setServerMsg(state && state.stored === false
     ? state.reason
-    : 'removed — manual codes still work with no server at all',
+    : 'removed. Manual Connect still works without a Quick Connect server',
   state && state.stored === false ? 'err' : '');
 };
 

@@ -190,3 +190,18 @@ test('desktop release guards cover stale callbacks, destination reservations, an
     'cleanup results must not claim deletion without checking the cleanup result');
   assert.match(renderer, /Cleanup could not be confirmed\. Close YShare and manually delete/);
 });
+
+test('Manual Connect copy states the direct-network boundary on both platforms', () => {
+  const desktopHtml = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'index.html'), 'utf8');
+  const desktopRenderer = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'renderer.js'), 'utf8');
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  const readme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
+  const selfHosting = fs.readFileSync(path.join(__dirname, '..', 'docs', 'SELF-HOSTING.md'), 'utf8');
+  const combined = [desktopHtml, desktopRenderer, mobile, readme, selfHosting].join('\n');
+
+  assert.doesNotMatch(combined, /no server at all|no server whatsoever/i);
+  assert.match(desktopHtml, /without a Quick Connect server/);
+  assert.match(mobile, /without a Quick Connect server/);
+  assert.match(readme, /Without TURN, the devices still need a direct network path\./);
+  assert.match(selfHosting, /direct\/STUN-only/);
+});

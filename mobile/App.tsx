@@ -378,7 +378,7 @@ function App(): React.JSX.Element {
     applySignal('');
     const stored = await writeSignalSetting('');
     setSrvMsg(stored
-      ? 'removed — manual codes still work with no server at all'
+      ? 'removed. Manual Connect still works without a Quick Connect server'
       : 'removed for now, but this phone would not let YShare forget it');
   }
 
@@ -1863,10 +1863,11 @@ function App(): React.JSX.Element {
               {srvOpen ? (
                 <View style={styles.srvEdit}>
                   <Text style={styles.hint}>
-                    YShare has no server of its own — nothing you send passes through us. The
+                    YShare has no server of its own. Nothing you send passes through us. The
                     6-character code needs a small connect-me service to introduce the two
                     devices. Run your own (see SELF-HOSTING.md) or paste one you trust. Leave it
-                    empty and the manual code still works, with no server at all.
+                    empty to use Manual Connect without a Quick Connect server. Without TURN,
+                    the devices still need a direct path.
                   </Text>
                   <TextInput
                     style={styles.input}

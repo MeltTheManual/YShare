@@ -50,19 +50,20 @@ only. Add TURN later only if the networks you use cannot connect directly.
 You have two ways to connect:
 
 - **Quick Connect:** enter the address of a YShare server you run or trust, then use a six-character code.
-- **Manual Connect:** copy and paste the longer connection codes. This needs no server at all.
+- **Manual Connect:** exchange the longer offer and reply codes yourself. It works without a Quick Connect
+  server. Without TURN, the devices still need a direct network path.
 
 Both devices must use the same Quick Connect server because that is the meeting point where they exchange
 temporary connection information. For example, if the server is `wss://signal.example.com`, enter that exact
 address on the computer and the phone. The address is a setting, not code that must be written into YShare.
 
-## If YShare will not connect
+## If YShare cannot connect
 
 <img alt="A plain-language connection guide: an open direct path moves the file, a blocked direct path uses TURN when available, and a blocked path without TURN has no route." src="docs/assets/readme-connection-help-v1.png">
 
 A six-character code proves that the devices met through the same Quick Connect server. It does not prove
-that the network will allow a path for the file. Manual Connect removes the need for the short-code server,
-but it cannot force a blocked network to open a direct path.
+that the network will allow a path for the file. Manual Connect replaces that introduction step with offer
+and reply codes. Without TURN, it still needs the networks to allow a direct path.
 
 - **Same normal Wi-Fi:** a direct transfer usually works without TURN.
 - **Guest, hotel, school, or office Wi-Fi:** the network may isolate devices, even when both show the same
@@ -142,15 +143,26 @@ Run the full local verification gate:
 npm run verify
 ```
 
-## What is still unfinished
+## What is left before the first release
 
-- There is no official installer or APK download yet.
-- Unrelated-network transfers, including a path that really uses TURN, still need release-level proof.
-- Interrupted transfers restart from zero.
-- Publishing to Android Downloads requires Android 10 or newer.
-- One sender, one receiver, and one file or folder can be active at a time.
+The source is public, but there is no official Windows or Android download yet. This is the release order:
 
-This is an honest source release, not a claim that version 1.0 is finished.
+1. Test the current Android build on a real phone and send one file in both directions.
+2. Complete the final code, security, dependency, documentation, and public-repository review.
+3. Create the private Android release-signing key and back it up safely outside Git.
+4. Test the computer and phone on unrelated internet connections, then confirm one transfer really uses
+   TURN instead of connecting directly.
+5. Build the final unsigned Windows installer and the signed Android APK.
+6. Publish both files with SHA-256 checksums and plain release notes.
+
+## Current product limits
+
+- If a transfer is interrupted, it starts again from the beginning. Resume is not supported yet.
+- Saving into the public Android Downloads folder requires Android 10 or newer.
+- YShare handles one sender, one receiver, and one file or folder at a time.
+
+The source release is ready to inspect and build today. Official app downloads come after the release steps
+above pass.
 
 ## Contributing
 
