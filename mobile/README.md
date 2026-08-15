@@ -80,7 +80,7 @@ The application ID is **`app.yshare`** (settled 14 August 2026). This is permane
 updates an app by this string, so changing it after anyone installs YShare would produce a second, separate
 app rather than an update.
 
-The internal Kotlin package is still `com.ysharemobile`, and that is fine — `namespace` and `applicationId`
+The internal Kotlin package is still `com.ysharemobile`, and that is fine. `namespace` and `applicationId`
 are different things, and only the latter is user-visible. Renaming the internal package is optional tidying
 with no user benefit.
 
@@ -88,11 +88,13 @@ If you previously sideloaded a test build under the old ID, the new build instal
 of replacing it. Uninstall the old one to avoid confusion.
 
 The release signing identity is still outstanding. Create the keystore yourself so its password never passes
-through anyone else, keep it outside this repository, and back it up somewhere you control — losing it means
+through anyone else, keep it outside this repository, and back it up somewhere you control. Losing it means
 never being able to update the published app again:
 
 ```powershell
-keytool -genkeypair -v -storetype PKCS12 -keystore D:\Claude\keys\yshare-release.keystore `
+$YShareKeyDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'YShare-Keys'
+New-Item -ItemType Directory -Path $YShareKeyDir -Force | Out-Null
+keytool -genkeypair -v -storetype PKCS12 -keystore (Join-Path $YShareKeyDir 'yshare-release.keystore') `
   -alias yshare -keyalg RSA -keysize 4096 -validity 10000
 ```
 

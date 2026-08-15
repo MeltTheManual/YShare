@@ -7,7 +7,7 @@ welcome.
 ## Before you start something big
 
 Open an issue first for anything beyond a bug fix. The project has a narrow scope
-on purpose (see `VISION.md`), and it is kinder to say "that does not fit" in an
+on purpose (see the current limits in `README.md`), and it is kinder to say "that does not fit" in an
 issue than on a finished pull request.
 
 Things that are **out of scope** for version 1: user accounts, cloud storage,
