@@ -11,10 +11,6 @@ Send a file or folder directly from one device to another.
 YShare works on Windows and Android. Pick something, share a code, let the other person inspect the offer,
 then send. The receiving device checks every byte before it says the transfer worked.
 
-> **Current status:** the source code is public and pre-1.0. There is no official download yet. The Windows
-> installer is unsigned, Android release signing is not finished, and unrelated-network relay testing is
-> still required before downloadable builds are published.
-
 ## How it works
 
 <img alt="Four simple steps: pick a file, share a six-character code, let the receiver accept, then send directly between the two devices." src="docs/assets/readme-how-v2.png">
@@ -143,26 +139,11 @@ Run the full local verification gate:
 npm run verify
 ```
 
-## What is left before the first release
-
-The source is public, but there is no official Windows or Android download yet. This is the release order:
-
-1. Test the current Android build on a real phone and send one file in both directions.
-2. Complete the final code, security, dependency, documentation, and public-repository review.
-3. Create the private Android release-signing key and back it up safely outside Git.
-4. Test the computer and phone on unrelated internet connections, then confirm one transfer really uses
-   TURN instead of connecting directly.
-5. Build the final unsigned Windows installer and the signed Android APK.
-6. Publish both files with SHA-256 checksums and plain release notes.
-
-## Current product limits
+## Good to know
 
 - If a transfer is interrupted, it starts again from the beginning. Resume is not supported yet.
 - Saving into the public Android Downloads folder requires Android 10 or newer.
 - YShare handles one sender, one receiver, and one file or folder at a time.
-
-The source release is ready to inspect and build today. Official app downloads come after the release steps
-above pass.
 
 ## Contributing
 
