@@ -102,6 +102,30 @@ Do the same on the phone. Both devices must use the same server to swap a code.
 
 ---
 
+## What a failed connection means
+
+Quick Connect and file transport are two separate steps:
+
+1. The server introduces the devices and swaps temporary connection information.
+2. WebRTC tries to find a network path for the file.
+
+Receiving a six-character code only proves step 1 worked. The transfer can still fail at step 2 when guest
+Wi-Fi isolates devices, a firewall blocks peer traffic, or a mobile carrier uses restrictive NAT.
+
+| Situation | What happens | What to try |
+| --- | --- | --- |
+| Same normal Wi-Fi | Usually connects directly. No relay is needed. | Keep both devices on that Wi-Fi. |
+| Same guest or isolated Wi-Fi | Devices may be blocked from reaching each other. | Use a normal private Wi-Fi network or TURN. |
+| Different networks | YShare tries a direct route first. | If it fails, try another network or enable TURN. |
+| Direct route blocked, TURN configured | Encrypted file bytes can pass through your relay. | Check coturn, its firewall ports, and bandwidth limits. |
+| Direct route blocked, no TURN configured | The devices have no usable route for the file. | Add TURN or move one device to a less restrictive network. |
+
+Manual Connect avoids the introduction server, but it does not bypass a blocked network. If both devices
+are online and a code works but the connection still fails, this can be a network limitation rather than an
+app defect.
+
+---
+
 ## Option B — add a TURN relay
 
 Add this only if transfers fail to connect for you, which usually means one side

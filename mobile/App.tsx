@@ -45,6 +45,7 @@ import {
   CHUNK,
   PER_CONN_HIGH,
   LOW_THRESHOLD,
+  CONNECTION_FAILURE_HELP,
   RTC_CONFIG,
   buildRtcConfig,
   fetchTurnCreds,
@@ -1311,7 +1312,7 @@ function App(): React.JSX.Element {
     // If ICE never lands, don't hang forever.
     sendTimerRef.current = setTimeout(() => {
       if (!sendingRef.current && !sendFinishedRef.current) {
-        finishSender('could not connect (30s) — check both sides are online and try again', 0);
+        finishSender(CONNECTION_FAILURE_HELP, 0);
       }
     }, CONNECT_TIMEOUT_MS);
   }
@@ -1726,7 +1727,7 @@ function App(): React.JSX.Element {
           } else if ((s === 'failed' || s === 'disconnected') && acceptedRef.current && !savingRef.current) {
             abortReceive(false, 'connection lost — transfer interrupted ✗');
           } else if (s === 'failed' && !acceptedRef.current && !savingRef.current) {
-            setStatus('connection failed — could not reach the sender');
+            setStatus(CONNECTION_FAILURE_HELP);
           }
         });
       }
@@ -1740,7 +1741,7 @@ function App(): React.JSX.Element {
     // If the sender never shows up (or ICE stalls), don't hang forever.
     recvTimerRef.current = setTimeout(() => {
       if (!offerRef.current && !acceptedRef.current && !savingRef.current) {
-        setStatus('could not connect (30s) — check both sides are online and try again');
+        setStatus(CONNECTION_FAILURE_HELP);
         recvTeardown();
       }
     }, CONNECT_TIMEOUT_MS);

@@ -3,6 +3,7 @@ export const NUM_CONNS: number;
 export const CHUNK: number;
 export const PER_CONN_HIGH: number;
 export const LOW_THRESHOLD: number;
+export const CONNECTION_FAILURE_HELP: string;
 export const PROTOCOL_LIMITS: Readonly<{
   maxTransferBytes: number;
   maxFolderFiles: number;

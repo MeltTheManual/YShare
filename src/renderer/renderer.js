@@ -19,6 +19,7 @@ const $ = (id) => document.getElementById(id);
 // in the SHARED engine (shared/engine.js) — one source of truth for desktop + mobile.
 const {
   NUM_CONNS, PER_CONN_HIGH, LOW_THRESHOLD, CHUNK,
+  CONNECTION_FAILURE_HELP,
   buildRtcConfig, fetchTurnCreds, signalDial, configureSignaling,
   encodeDescs, decodeCode, connRange, waitIceComplete,
   passwordProof, newTransferId,
@@ -342,7 +343,7 @@ function wireSenderConn(pc, owner) {
       } else if (!owner.sending && !owner.finished && s === 'failed') {
         owner.cancelled = true;
         owner.terminal = true;
-        setStatus('connection failed — could not reach the receiver', 'err');
+        setStatus(CONNECTION_FAILURE_HELP, 'err');
         senderFlowEnded(owner);
         senderTeardown(owner);
       }
@@ -508,7 +509,7 @@ async function applyAnswers(answers, owner = S) {
     if (senderIsCurrent(owner) && !owner.sending && !owner.finished && !owner.terminal) {
       owner.cancelled = true;
       owner.terminal = true;
-      setStatus('could not connect (30s) — check both sides are online and try again', 'err');
+      setStatus(CONNECTION_FAILURE_HELP, 'err');
       senderFlowEnded(owner);
       senderTeardown(owner);
     }
@@ -1181,7 +1182,7 @@ async function answerOffers(offers, rtcConfig, quickAttempt = null) {
     if (receiverIsCurrent(owner) && !owner.offer && !owner.finished && !owner.cancelled) {
       owner.cancelled = true;
       owner.terminal = 'failed';
-      setStatus('could not connect (30s) — check both sides are online and try again', 'err');
+      setStatus(CONNECTION_FAILURE_HELP, 'err');
       receiverTeardown(owner);
       $('btnQuickJoin').disabled = !canQuickConnect();
     }
@@ -1207,7 +1208,7 @@ function wireReceiverConn(pc, owner) {
       } else if (!owner.finished && s === 'failed') {
         owner.cancelled = true;
         owner.terminal = 'failed';
-        setStatus('connection failed — could not reach the sender', 'err');
+        setStatus(CONNECTION_FAILURE_HELP, 'err');
         receiverTeardown(owner);
       }
     }

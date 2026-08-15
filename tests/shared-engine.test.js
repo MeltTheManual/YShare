@@ -7,6 +7,13 @@ const engine = require('../shared/engine');
 
 const HASH = 'a'.repeat(64);
 
+test('connection failures explain the network and relay limit in plain language', () => {
+  assert.equal(
+    engine.CONNECTION_FAILURE_HELP,
+    'could not connect. Some networks block the direct path, so this does not always mean YShare is broken. Try the same normal Wi-Fi, avoid guest Wi-Fi, or use a Quick Connect server with TURN.',
+  );
+});
+
 function descriptions(type) {
   return Array.from({ length: engine.NUM_CONNS }, (_, i) => ({
     type,

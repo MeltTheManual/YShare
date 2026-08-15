@@ -52,6 +52,30 @@ You have two ways to connect:
 - **Quick Connect:** enter the address of a YShare server you run or trust, then use a six-character code.
 - **Manual Connect:** copy and paste the longer connection codes. This needs no server at all.
 
+Both devices must use the same Quick Connect server because that is the meeting point where they exchange
+temporary connection information. For example, if the server is `wss://signal.example.com`, enter that exact
+address on the computer and the phone. The address is a setting, not code that must be written into YShare.
+
+## If YShare will not connect
+
+<img alt="A plain-language connection guide: an open direct path moves the file, a blocked direct path uses TURN when available, and a blocked path without TURN has no route." src="docs/assets/readme-connection-help-v1.png">
+
+A six-character code proves that the devices met through the same Quick Connect server. It does not prove
+that the network will allow a path for the file. Manual Connect removes the need for the short-code server,
+but it cannot force a blocked network to open a direct path.
+
+- **Same normal Wi-Fi:** a direct transfer usually works without TURN.
+- **Guest, hotel, school, or office Wi-Fi:** the network may isolate devices, even when both show the same
+  Wi-Fi name.
+- **Different networks:** YShare still tries a direct path, but a router, firewall, or mobile carrier may
+  block it.
+- **Direct path blocked and TURN available:** the encrypted transfer can use the relay.
+- **Direct path blocked and no TURN available:** there is no file route. Try normal Wi-Fi, try another
+  network, or use a Quick Connect server with TURN.
+
+A failed connection does not automatically mean YShare's code is broken. The app now shows this same advice
+when its connection attempt fails.
+
 The self-hosting guide explains both signaling-only and relay setups: [run your own server](docs/SELF-HOSTING.md).
 
 ## What YShare protects
