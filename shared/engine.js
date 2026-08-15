@@ -23,6 +23,7 @@
   const CHUNK = 64 * 1024;                // 64 KiB per data-channel message (64K beat 16K)
   const PER_CONN_HIGH = 1 * 1024 * 1024;  // pause a connection above 1 MiB buffered
   const LOW_THRESHOLD = 256 * 1024;       // resume once it drains below 256 KiB
+  const CONNECTION_FAILURE_HELP = 'could not connect. Some networks block the direct path, so this does not always mean YShare is broken. Try the same normal Wi-Fi, avoid guest Wi-Fi, or use a Quick Connect server with TURN.';
 
   // Untrusted peers control protocol messages. These limits are deliberately far
   // above normal use, but keep malformed metadata from turning into disk, memory,
@@ -585,6 +586,7 @@
     CHUNK,
     PER_CONN_HIGH,
     LOW_THRESHOLD,
+    CONNECTION_FAILURE_HELP,
     PROTOCOL_LIMITS,
     RTC_CONFIG,
     MAX_SIGNAL_ENDPOINT_CHARS,
