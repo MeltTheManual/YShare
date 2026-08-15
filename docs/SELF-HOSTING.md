@@ -7,9 +7,10 @@ a server you control or trust.
 **You do not edit YShare's code to add a server.** Run the included service, then
 paste its `wss://` address into the Quick connect server setting on both devices.
 
-**You may not need one at all.** Every YShare build can transfer files using the
-manual connection codes, which need no server whatsoever. Quick Connect exists
-purely to save you from copying a long code by hand.
+**You may not need to configure a YShare server.** Manual Connect lets the two
+devices exchange the longer offer and reply codes by hand. Without a configured
+TURN service, that path is direct/STUN-only and can still fail on a restrictive
+network. Quick Connect exists to replace the long codes with a short code.
 
 ---
 

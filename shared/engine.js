@@ -156,8 +156,8 @@
   // ── Quick Connect endpoint — deliberately NOT compiled into the app ────────
   // YShare ships with no server of its own, so nobody inherits somebody else's
   // bandwidth bill. Quick Connect (the 6-character claim code) needs a small
-  // signaling service; manual connector codes need none at all, so the app is
-  // fully usable with this left unset.
+  // signaling service. Manual connector codes do not need that introduction
+  // service, so the app remains usable with this left unset.
   //
   // The address is chosen per install and handed to the engine at startup by the
   // platform (desktop settings.json / Android app settings). See docs/SELF-HOSTING.md.
