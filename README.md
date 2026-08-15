@@ -2,6 +2,8 @@
 
 # YShare
 
+Created by [Melt The Manual (@MeltTheManual)](https://github.com/MeltTheManual).
+
 Send a file or folder directly from one device to another.
 
 **No account. No cloud storage quota. No cloud copy left behind.**
