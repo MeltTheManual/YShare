@@ -18,7 +18,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (pako) {
   'use strict';
 
-  // --- tuning (measured in test-harness/, 2026-06-26 — see CHANGELOG) ---------
+  // --- tuning (measured during local TURN relay tests on 2026-06-26) ----------
   const NUM_CONNS = 8;                    // parallel peer connections (sweet spot ~8)
   const CHUNK = 64 * 1024;                // 64 KiB per data-channel message (64K beat 16K)
   const PER_CONN_HIGH = 1 * 1024 * 1024;  // pause a connection above 1 MiB buffered
