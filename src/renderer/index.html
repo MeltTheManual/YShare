@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- No server address is compiled into YShare. connect-src therefore names a
+       POLICY, not a host: any signaling server the person configures must be TLS
+       (wss/https), and cleartext is permitted only to their own machine. This
+       mirrors signalEndpointIssue() in shared/engine.js exactly. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss: https: ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*;" />
+  <title>YShare</title>
+  <link rel="stylesheet" href="fonts/fonts.css" />
+  <style>
+    /* ============================================================
+       YShare — "COURIER" skin (owner-designed 2026-07-11, replaces
+       the dark DUNE skin): warm paper + ink, burnt-orange brand,
+       Instrument Serif display, JetBrains Mono letterspaced labels,
+       Georgia body copy, 1px ink borders with hard offset shadows.
+       The metaphor: the quick code is a CLAIM TICKET for a parcel.
+       ============================================================ */
+    :root {
+      color-scheme: light;
+      --paper: #f4eee1;          /* page background — owner's exact pick from the original mock (flat, light warm cream) */
+      --card: #fbf7ec;           /* card background */
+      --card-deep: #f4eee1;      /* recessed card surfaces */
+      --tile: #fffdf6;           /* code tiles + inputs */
+      --ink: #26221c;            /* near-black warm ink */
+      --body: #55493a;           /* Georgia body copy */
+      --muted: #6f6455;          /* secondary mono text */
+      --faint: #8a7f6d;          /* kickers / role labels */
+      --ghostline: #a99c85;      /* dashed borders */
+      --hairline: #d9cdb6;       /* soft rules inside cards */
+      --footer: #a2947e;
+      --orange: #d4551f;         /* THE brand color */
+      --orange-deep: #b93f12;    /* links / hover */
+      --cream: #fff7ef;          /* text on orange */
+      --ok: #3d7a4f; --warn: #a06514; --err: #9c3a2a;
+      --shadow-card: 7px 7px 0 rgba(38, 34, 28, 0.13);
+      --shadow-btn: 3px 3px 0 rgba(38, 34, 28, 0.2);
+      --mono: "JetBrains Mono", Consolas, monospace;
+      --serif: "Instrument Serif", Georgia, serif;
+      --copy: Georgia, "Times New Roman", serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: var(--paper);   /* flat — the original mock's clean paper colour (owner's call) */
+      color: var(--ink);
+      font-family: var(--copy);
+      font-size: 17px;
+      padding: 40px 36px 64px;
+      min-height: 100%;
+    }
+    /* the document frame — the whole window is one paper form */
+    body::before {
+      content: ""; position: fixed; inset: 12px; border: 1px solid var(--ink);
+      pointer-events: none; z-index: 5;
+    }
+
+    /* Responsive width: fills a good part of a wide monitor but stays a centred
+       "document" — 1400 read as too wide, so ~1220 with a narrower main column. */
+    .topbar, .modes, .panel { width: min(1220px, 88vw); max-width: none; margin-left: auto; margin-right: auto; }
+
+    /* --- mono label utility (the courier stamp voice) --- */
+    .mlabel { font-family: var(--mono); text-transform: uppercase; }
+
+    /* ================= header (non-landing) ================= */
+    .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 26px; }
+    .topbar > div:first-child { display: flex; flex-direction: column; }
+    /* in the app header the kicker sits BELOW the wordmark (hero shows it above) */
+    body:not(.landing) .kicker-hero {
+      display: block; order: 3; font-family: var(--mono); text-transform: uppercase;
+      letter-spacing: 3px; font-size: 10.5px; color: var(--faint); margin-top: 9px;
+    }
+    body:not(.landing) .sub { display: none; }
+    /* app-header wordmark (non-landing) — was too small next to the panels */
+    h1 {
+      font-family: var(--serif); font-weight: 400; font-size: 44px;
+      margin: 0; letter-spacing: 0; line-height: 1;
+    }
+    h1 .y { color: var(--ink); }
+    h1 .share { color: var(--orange); font-style: italic; }
+
+    /* a persistent way back to the hero from any panel (hidden on the hero itself) */
+    .homebtn {
+      display: none; align-self: flex-start; background: transparent; border: none;
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 1.5px;
+      font-size: 10.5px; color: var(--muted); padding: 0; margin: 0 0 12px; cursor: pointer;
+    }
+    .homebtn:hover { color: var(--orange-deep); }
+    body:not(.landing) .homebtn { display: inline-block; }
+    .sub {
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 3px;
+      color: var(--faint); font-size: 9.5px; margin-top: 7px;
+    }
+
+    /* status stamp — hidden while idle; appears once there's something to say */
+    .pill {
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 1.5px;
+      font-size: 10.5px; color: var(--ink); background: var(--card);
+      border: 1px solid var(--ink); padding: 8px 12px; max-width: 430px;
+      box-shadow: var(--shadow-btn); transform: rotate(1.2deg);
+    }
+    .pill .dot { display: inline-block; width: 7px; height: 7px; background: var(--ghostline); margin-right: 8px; vertical-align: middle; }
+    .pill.on .dot { background: var(--ok); }
+    .pill.warn .dot { background: var(--warn); }
+    .pill.err .dot { background: var(--err); }
+    .pill.warn { color: var(--warn); }
+    .pill.err { color: var(--err); border-color: var(--err); }
+
+    /* ================= mode switch: hero cards ⇄ header tabs ================= */
+    .modes { display: flex; gap: 14px; margin-bottom: 22px; }
+    body:not(.landing) .modes { max-width: 760px; }
+    .mode { flex: 1; cursor: pointer; }
+
+    /* tab form (after a mode is picked) */
+    .mode {
+      position: relative;
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 3px;
+      font-size: 12px; text-align: center; padding: 13px;
+      border: 1px dashed var(--ghostline); color: var(--faint);
+      background: transparent; transition: color .15s, border-color .15s, background .15s;
+    }
+    .mode:hover { color: var(--ink); border-color: var(--muted); }
+    .mode.active {
+      border: 1px solid var(--ink); border-style: solid; color: var(--ink);
+      background: var(--card); box-shadow: var(--shadow-btn);
+    }
+    .mode.active::before {
+      content: ""; position: absolute; top: -1px; left: -1px; right: -1px;
+      height: 3px; background: var(--orange);
+    }
+    /* rich hero-card content hidden in tab form */
+    .mode .m-role, .mode .m-badge, .mode .m-title, .mode .m-copy, .mode .m-link { display: none; }
+
+    /* ================= landing = the hero (mock screen 1) ================= */
+    /* Biased upward from dead-centre (owner: the cards sat "very low ground" — lift
+       them a little). flex-start + a measured top offset keeps it fitting on short
+       windows while giving more breathing room BELOW the cards than above. */
+    /* Top-anchored: the hero STARTS near the top and flows down (owner: "things go
+       up… start from here"), rather than floating dead-centre. */
+    body.landing { display: flex; flex-direction: column; justify-content: flex-start; align-items: center; padding-top: clamp(76px, 12vh, 156px); }
+    body.landing .topbar { flex-direction: column; align-items: center; margin-bottom: 52px; width: 100%; }
+    body.landing .topbar > div:first-child { text-align: center; }
+    body.landing .pill { display: none; }   /* idle stamp stays hidden on the hero */
+    body.landing .kicker-hero {
+      display: block; font-family: var(--mono); text-transform: uppercase;
+      letter-spacing: 4.5px; font-size: 12px; color: var(--faint);
+      text-align: center; margin-bottom: 16px;
+    }
+    .kicker-hero { display: none; }
+    body.landing h1 { font-size: 104px; }    /* the wordmark reads bigger than the two cards */
+    body.landing h1::after {
+      content: ""; display: block; width: 104px; height: 2px;
+      background: var(--orange); margin: 26px auto 0;
+    }
+    body.landing .sub { font-size: 13px; letter-spacing: 2.5px; color: var(--muted); margin-top: 26px; text-align: center; }
+
+    body.landing .modes { width: 100%; max-width: min(1060px, 82vw); gap: 0; align-items: stretch; }
+    body.landing .mode {
+      display: flex; flex-direction: column; min-height: 296px;
+      padding: 32px 34px 28px; text-align: left; letter-spacing: 0; font-size: 16px;
+      text-transform: none; border: 1px solid var(--ink); background: var(--card);
+      box-shadow: var(--shadow-card); color: var(--ink);
+      transition: transform .12s, box-shadow .12s;
+    }
+    /* the link sits at the CARD FOOT so the taller card reads as one filled block */
+    body.landing .mode .m-link { margin-top: auto; }
+    body.landing .mode:hover { transform: translate(-2px, -2px); box-shadow: 9px 9px 0 rgba(38,34,28,.13); }
+    body.landing .mode.active::before { display: none; }
+    /* the dashed divider between the two hero cards */
+    body.landing .modes::before {
+      content: ""; order: 1; width: 0; margin: 8px 22px;
+      border-left: 1px dashed var(--ghostline);
+    }
+    body.landing #modeSend { order: 0; }
+    body.landing #modeRecv { order: 2; }
+    body.landing .mode .m-tab { display: none; }
+    body.landing .mode .m-role {
+      display: block; font-family: var(--mono); text-transform: uppercase;
+      letter-spacing: 2px; font-size: 11px; color: var(--faint); margin-bottom: 30px;
+    }
+    body.landing .mode .m-badge {
+      display: flex; position: absolute; top: 26px; right: 28px;
+      width: 54px; height: 54px; border-radius: 50%;
+      align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 17px; font-weight: 700;
+    }
+    /* the "seal" — the orange Y badge breathes a pulsing ring (from the owner's mock) */
+    body.landing #modeSend .m-badge {
+      background: var(--orange); color: var(--cream);
+      animation: sealPulse 3.5s ease-in-out infinite;
+    }
+    @keyframes sealPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(212, 85, 31, 0.35); }
+      50%      { box-shadow: 0 0 0 10px rgba(212, 85, 31, 0); }
+    }
+    body.landing #modeRecv .m-badge { border: 1.5px dashed var(--ink); color: var(--ink); }
+    body.landing .mode .m-title {
+      display: block; font-family: var(--serif); font-weight: 400;
+      font-size: 48px; line-height: 1.05; margin: 0 0 13px;
+    }
+    body.landing .mode .m-copy {
+      display: block; font-family: var(--copy); font-size: 16px; line-height: 1.55;
+      color: var(--body); margin: 0 0 20px; max-width: 430px;
+    }
+    body.landing .mode .m-link {
+      display: block; font-family: var(--mono); text-transform: uppercase;
+      letter-spacing: 1.5px; font-size: 11px; color: var(--orange-deep);
+    }
+    body.landing .mode:hover .m-link { text-decoration: underline; text-underline-offset: 3px; }
+
+    /* ================= panels ================= */
+    .panel { display: none; }
+    /* main column narrower (owner: "sending things too wide") + side column bigger */
+    .panel.show { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 30px; align-items: start; }
+    .panel-main { border: 1px solid var(--ink); background: var(--card); box-shadow: var(--shadow-card); }
+    .panel-side { display: flex; flex-direction: column; gap: 18px; }
+
+    /* the header divider is a SOLID DARK INK line — same weight/colour as the box's
+       outer edge (owner: "dark, just like the starting line where the box starts"). */
+    .panel-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 15px 24px; border-bottom: 1px solid var(--ink);
+    }
+    .panel-head .ph-title { font-family: var(--mono); text-transform: uppercase; letter-spacing: 3px; font-size: 11.5px; color: var(--muted); }
+    .panel-head .ph-steps { font-family: var(--mono); text-transform: uppercase; letter-spacing: 2px; font-size: 10.5px; color: var(--faint); }
+
+    .step { padding: 22px 24px; }
+    .step + .step { border-top: 1px dashed var(--ghostline); }
+    .step h3 {
+      font-family: var(--serif); font-weight: 400; font-size: 27px;
+      margin: 0 0 7px; color: var(--ink); letter-spacing: 0; text-transform: none;
+    }
+    .step h3 .stepno { font-style: italic; color: var(--muted); margin-right: 10px; }
+    .step h3 .hint { font-family: var(--serif); font-style: italic; font-size: 19px; color: var(--faint); }
+    .hint { color: var(--body); font-family: var(--copy); font-size: 14.5px; line-height: 1.5; margin: 2px 0 13px; }
+
+    /* ================= buttons ================= */
+    button { font-family: var(--mono); text-transform: uppercase; letter-spacing: 2px; cursor: pointer; }
+    button.act {
+      background: var(--orange); color: var(--cream); border: 1px solid var(--ink);
+      padding: 12px 20px; font-size: 11.5px; box-shadow: var(--shadow-btn);
+    }
+    button.act:hover:not(:disabled) { background: var(--orange-deep); }
+    button.act:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(38,34,28,.2); }
+    button.act:disabled {
+      background: var(--card-deep); color: var(--footer); border: 1px dashed var(--ghostline);
+      box-shadow: none; cursor: not-allowed;
+    }
+    button.ghost {
+      background: transparent; color: var(--ink); border: 1px solid var(--ink);
+      padding: 10px 16px; font-size: 11px; letter-spacing: 1.5px;
+    }
+    button.ghost:hover { background: var(--card-deep); }
+    button.dashed {
+      background: transparent; color: var(--muted); border: 1px dashed var(--ghostline);
+      padding: 10px 16px; font-size: 11px; letter-spacing: 1.5px;
+    }
+    button.dashed:hover { color: var(--ink); border-color: var(--muted); }
+    button.danger {
+      background: transparent; color: var(--err); border: 1px solid var(--err);
+      padding: 10px 16px; font-size: 11px; letter-spacing: 1.5px;
+    }
+    button.danger:hover { background: rgba(156,58,42,.08); }
+
+    /* the static chip shown once a quick code is issued (presentation only) */
+    .issued {
+      display: inline-block; font-family: var(--mono); text-transform: uppercase;
+      letter-spacing: 2px; font-size: 11.5px; color: var(--ok);
+      border: 1px dashed var(--ok); padding: 12px 20px;
+    }
+
+    /* ================= inputs ================= */
+    input[type="text"], input[type="password"] {
+      background: var(--tile); border: 1px solid var(--ink); border-radius: 0;
+      color: var(--ink); padding: 13px 15px; font-size: 13.5px; font-family: var(--mono);
+    }
+    input:focus, textarea:focus { outline: none; border-color: var(--orange); box-shadow: 2px 2px 0 rgba(212,85,31,.25); }
+    input::placeholder, textarea::placeholder { color: var(--footer); }
+    /* receiver's code entry sized to match the sender's claim-ticket code prominence */
+    #quickIn { font-size: 26px; letter-spacing: 9px; text-transform: uppercase; width: 250px; text-align: center; padding: 15px 16px; font-weight: 700; }
+    textarea {
+      width: 100%; min-height: 64px; resize: vertical; margin-top: 8px;
+      background: var(--tile); color: var(--muted); border: 1px solid var(--ink);
+      border-radius: 0; padding: 9px 10px; font-family: var(--mono); font-size: 11px;
+    }
+    .fileinfo { font-family: var(--mono); font-size: 12px; color: var(--ink); margin-top: 10px; letter-spacing: .5px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+    /* ================= claim ticket (send side) ================= */
+    .ticket { border: 1px solid var(--ink); background: var(--card); box-shadow: var(--shadow-card); }
+    .ticket-head {
+      background: var(--orange); color: var(--cream); border-bottom: 1px solid var(--ink);
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 4px;
+      font-size: 11px; text-align: center; padding: 10px;
+    }
+    .ticket-sub {
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 2px;
+      font-size: 9.5px; color: var(--faint); text-align: center; padding: 14px 10px 0;
+    }
+    .tiles { display: flex; gap: 7px; justify-content: center; padding: 14px 14px 18px; }
+    .tiles span {
+      width: 46px; height: 56px; display: flex; align-items: center; justify-content: center;
+      background: var(--tile); border: 1px solid var(--ink);
+      font-family: var(--mono); font-weight: 700; font-size: 27px; color: var(--ink);
+    }
+    .ticket-foot {
+      border-top: 1px dashed var(--hairline); padding: 10px;
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 2px;
+      font-size: 9.5px; color: var(--muted); text-align: center;
+    }
+    .ticket-foot .odot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--orange); margin-right: 8px; vertical-align: -1px; }
+
+    /* dashed placeholders (no ticket yet / no incoming parcel yet) */
+    /* FIXED height + centred content so the Send and Receive placeholders are the
+       SAME size regardless of how their (different-length) captions wrap — this is
+       what made the side column "jump" when switching tabs. */
+    .placeholder {
+      border: 2px dashed var(--ghostline); padding: 20px 22px; text-align: center;
+      height: 200px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    .placeholder .ph-circle {
+      width: 46px; height: 46px; border-radius: 50%; border: 1.5px dashed var(--ghostline);
+      display: flex; align-items: center; justify-content: center; margin: 0 auto 14px;
+      color: var(--faint); font-size: 16px;
+    }
+    .placeholder .ph-label {
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 2px;
+      font-size: 10px; color: var(--faint); margin-bottom: 8px;
+    }
+    .placeholder .ph-copy { font-family: var(--copy); font-size: 13px; color: var(--body); line-height: 1.5; }
+
+    /* ================= transit card (progress) ================= */
+    .transit { border: 1px solid var(--ink); background: var(--card); box-shadow: var(--shadow-card); padding: 22px 22px 24px; }
+    .transit .t-label { font-family: var(--mono); text-transform: uppercase; letter-spacing: 3px; font-size: 11px; color: var(--muted); margin-bottom: 20px; }
+    .lane { position: relative; margin: 6px 2px 8px; }
+    .bar {
+      height: 4px; position: relative; overflow: visible; border: none; background:
+        repeating-linear-gradient(90deg, var(--ghostline) 0 5px, transparent 5px 10px);
+      background-position: center; background-size: 100% 1px; background-repeat: no-repeat;
+    }
+    .bar > span {
+      display: block; position: absolute; top: 0; left: 0; height: 4px; width: 0%;
+      background: var(--orange); transition: width .1s;
+    }
+    /* endpoint dots */
+    .lane::before, .lane::after {
+      content: ""; position: absolute; top: -3px; width: 10px; height: 10px; border-radius: 50%;
+    }
+    .lane::before { left: -2px; background: var(--orange); }
+    .lane::after { right: -2px; background: var(--ink); }
+    .t-ends { display: flex; justify-content: space-between; margin-top: 8px; }
+    .t-ends span { font-family: var(--mono); text-transform: uppercase; letter-spacing: 2px; font-size: 9.5px; color: var(--muted); }
+    /* reserve two lines so the transit card is the SAME height idle or mid-transfer
+       (and identical on Send + Receive) — no size jump when progress text appears */
+    .progtext { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 12px; letter-spacing: .5px; min-height: 2.5em; }
+
+    .result { margin-top: 4px; font-family: var(--copy); font-size: 13.5px; line-height: 1.5; }
+    .result.ok { color: var(--ok); }
+    .result.bad { color: var(--err); }
+
+    /* ================= incoming parcel (receive side) ================= */
+    .incoming { border: 1px solid var(--ink); background: var(--card); box-shadow: var(--shadow-card); }
+    .incoming h3 {
+      background: var(--ink); color: var(--card-deep); margin: 0;
+      font-family: var(--mono); font-weight: 400; text-transform: uppercase;
+      letter-spacing: 4px; font-size: 11px; text-align: center; padding: 10px;
+    }
+    .inc-body { padding: 16px 18px 18px; }
+    .incname { font-family: var(--serif); font-size: 24px; color: var(--ink); line-height: 1.2; word-break: break-all; }
+    .incsize { font-family: var(--mono); text-transform: uppercase; letter-spacing: 1.5px; font-size: 10.5px; color: var(--muted); margin: 6px 0 12px; }
+    .incmsg { font-family: var(--mono); font-size: 10.5px; color: var(--warn); min-height: 15px; margin-bottom: 10px; letter-spacing: .5px; }
+    #recvPassWrap input { width: 100%; }
+    #recvPassWrap { margin-bottom: 10px; }
+    #btnAccept { width: 100%; margin-bottom: 8px; padding: 12px 10px; font-size: 11px; letter-spacing: 1.5px; }
+    #btnDecline { width: 100%; }
+
+    /* deliver-to path line */
+    .pathline {
+      font-family: var(--mono); font-size: 11.5px; color: var(--ink);
+      background: var(--tile); border: 1px solid var(--hairline);
+      padding: 10px 12px; margin: 2px 0 12px; word-break: break-all; letter-spacing: .3px;
+    }
+
+    /* manual fallback cards keep the paper voice */
+    .step .mono-note { font-family: var(--mono); text-transform: uppercase; letter-spacing: 2px; font-size: 10px; color: var(--faint); margin-bottom: 8px; }
+
+    /* the end-of-flow step (result + cancel/home) collapses while it has nothing to show */
+    .endstep { display: none; }
+    .endstep:has(.result:not(:empty)) { display: block; }
+    .endstep:has(button:not([style*="none"])) { display: block; }
+
+    /* ================= quick connect server (hero only) =================
+       YShare ships with no server of its own, so the hero carries one quiet
+       line explaining the choice. Collapsed to a single sentence until opened —
+       the landing page stays a hero, not a settings screen. */
+    .server { width: min(1060px, 82vw); margin: 30px auto 0; text-align: center; }
+    body:not(.landing) .server { display: none; }
+    .server .srv-line {
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 2px;
+      font-size: 10px; color: var(--footer);
+    }
+    .server .srv-line b { color: var(--muted); font-weight: normal; }
+    .server .srv-line button {
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 2px;
+      font-size: 10px; color: var(--orange); background: none; border: 0;
+      padding: 0 0 1px; margin-left: 8px; cursor: pointer;
+      border-bottom: 1px solid var(--orange); box-shadow: none;
+    }
+    .server .srv-line button:hover { color: var(--ink); border-bottom-color: var(--ink); }
+    .server .srv-edit {
+      display: none; max-width: 620px; margin: 16px auto 0; padding: 18px 20px 16px;
+      border: 1px dashed var(--ghostline); background: var(--card); text-align: left;
+    }
+    .server.open .srv-edit { display: block; }
+    .server .srv-edit .mono-note {
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 2px;
+      font-size: 10px; color: var(--faint); margin-bottom: 8px;
+    }
+    .server .srv-edit .hint { margin-bottom: 10px; }
+    .server .srv-edit input { width: 100%; margin-bottom: 10px; }
+    .server .srv-msg { font-family: var(--copy); font-size: 13.5px; margin-top: 10px; min-height: 1px; }
+    .server .srv-msg.err { color: var(--err); }
+    .server .srv-msg.ok { color: var(--ok); }
+
+    /* ================= footer ================= */
+    .foot {
+      position: fixed; left: 13px; right: 13px; bottom: 13px; text-align: center;
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 2px;
+      font-size: 10px; color: var(--footer); pointer-events: none;
+      background: var(--paper); padding: 9px 0 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div>
+      <button class="homebtn" id="btnHome">← Home</button>
+      <div class="kicker-hero">Peer-to-peer file sharing</div>
+      <h1><span class="y">Y</span><span class="share">Share</span></h1>
+      <div class="sub">Send anything to anyone — fast · private · free</div>
+    </div>
+    <!-- hidden while idle — it only appears once there is something real to say -->
+    <div id="status" class="pill" style="display:none"><span class="dot"></span><span id="statusText">idle</span></div>
+  </div>
+
+  <div class="modes">
+    <div class="mode" id="modeSend">
+      <span class="m-role">For the sender</span>
+      <span class="m-badge">Y</span>
+      <span class="m-title">Send</span>
+      <span class="m-copy">Choose a file and we hand you a short code — pass it along like a claim ticket.</span>
+      <span class="m-link">Dispatch →</span>
+      <span class="m-tab">↑ Send a file</span>
+    </div>
+    <div class="mode" id="modeRecv">
+      <span class="m-role">For the receiver</span>
+      <span class="m-badge">↓</span>
+      <span class="m-title">Receive</span>
+      <span class="m-copy">Type the sender's 6-character code and the file comes straight to you.</span>
+      <span class="m-link">Collect →</span>
+      <span class="m-tab">↓ Receive a file</span>
+    </div>
+  </div>
+
+  <!-- Quick connect server: YShare runs none of its own, so this is the person's
+       own choice. Manual codes work with this left empty. -->
+  <div class="server" id="serverBox">
+    <div class="srv-line">
+      <span id="srvSummary">Quick connect server · <b>not set</b></span>
+      <button type="button" id="btnServerToggle">Change</button>
+    </div>
+    <div class="srv-edit">
+      <div class="mono-note">Quick connect server</div>
+      <div class="hint">
+        YShare has no server of its own — nothing you send passes through us. The 6-character
+        code needs a small connect-me service to introduce the two devices. Run your own
+        (see SELF-HOSTING.md) or paste one you trust. Leave it empty and the manual code
+        still works, with no server at all.
+      </div>
+      <input type="text" id="serverIn" placeholder="wss://your-server.example:8443" spellcheck="false" />
+      <div class="row">
+        <button class="act" id="btnSaveServer">Save</button>
+        <button class="dashed" id="btnClearServer">Remove</button>
+      </div>
+      <div class="srv-msg" id="srvMsg"></div>
+    </div>
+  </div>
+
+  <!-- SEND -->
+  <div class="panel" id="panelSend">
+    <div class="panel-main">
+      <div class="panel-head">
+        <span class="ph-title">Sending a file</span>
+        <span class="ph-steps">3 steps</span>
+      </div>
+      <div class="step">
+        <h3><span class="stepno">1.</span>Pick what to send</h3>
+        <div class="row">
+          <button class="act" id="btnPick">Choose file…</button>
+          <button class="ghost" id="btnPickFolder">Choose folder…</button>
+        </div>
+        <div class="fileinfo" id="fileInfo"></div>
+      </div>
+      <div class="step">
+        <h3><span class="stepno">2.</span>Password <span class="hint">(optional)</span></h3>
+        <div class="hint">If set, the receiver must enter it before the file starts.</div>
+        <input type="password" id="sendPass" placeholder="(no password)" autocomplete="new-password" style="width:min(360px,100%)" />
+      </div>
+      <div class="step">
+        <h3><span class="stepno">3.</span>Quick connect</h3>
+        <div class="hint">Get a short code and tell it to the receiver. Everything else is automatic.</div>
+        <button class="act" id="btnQuickSend" disabled>Get quick code</button>
+        <span class="issued" id="issuedChip" style="display:none">Code issued ✓</span>
+        <!-- renderer.js writes the raw code here; presentation mirrors it into the ticket tiles -->
+        <div id="quickCodeOut" style="display:none"></div>
+      </div>
+      <!-- manual fallback: hidden unless quick connect fails (owner decision 2026-07-09) -->
+      <div class="step" id="manualSend" style="display:none">
+        <div class="mono-note">Manual fallback</div>
+        <h3>Create your connection code</h3>
+        <div class="hint">If quick connect is unavailable: send this long code to the receiver yourself.</div>
+        <button class="act" id="btnCreateOffer" disabled>Create code</button>
+        <textarea id="offerOut" readonly placeholder="(your code appears here)"></textarea>
+        <button class="ghost" id="btnCopyOffer">Copy code</button>
+        <div class="hint" style="margin-top:12px">…then paste their reply code here and connect:</div>
+        <textarea id="answerIn" placeholder="(paste the reply code here)"></textarea>
+        <button class="act" id="btnConnectSend" disabled>Connect &amp; send</button>
+      </div>
+      <div class="step endstep">
+        <div class="result" id="sendResult"></div>
+        <div style="margin-top:10px" class="row">
+          <button class="danger" id="btnSendCancel" style="display:none">✕ Cancel transfer</button>
+          <button class="ghost" id="btnSendNew" style="display:none">Home</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-side">
+      <!-- placeholder until a quick code exists, then the claim ticket -->
+      <div class="placeholder" id="noTicket">
+        <div class="ph-circle">Y</div>
+        <div class="ph-label">No claim ticket yet</div>
+        <div class="ph-copy">Pick a file and get a quick code — your ticket will appear here.</div>
+      </div>
+      <div class="ticket" id="ticketCard" style="display:none">
+        <div class="ticket-head">Claim ticket</div>
+        <div class="ticket-sub">Tell this code to the receiver</div>
+        <div class="tiles" id="ticketTiles"></div>
+        <div class="ticket-foot"><span class="odot"></span>Valid for one transfer</div>
+      </div>
+      <div class="transit">
+        <div class="t-label">Transit</div>
+        <div class="lane">
+          <div class="bar"><span id="sendBar"></span></div>
+        </div>
+        <div class="t-ends"><span>You</span><span>Receiver</span></div>
+        <div class="progtext" id="sendProg">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECEIVE -->
+  <div class="panel" id="panelRecv">
+    <div class="panel-main">
+      <div class="panel-head">
+        <span class="ph-title">Receiving a file</span>
+        <span class="ph-steps">2 steps</span>
+      </div>
+      <div class="step">
+        <h3><span class="stepno">1.</span>Quick connect</h3>
+        <div class="hint">Type the sender's 6-character code. Everything else is automatic.</div>
+        <div class="row">
+          <input type="text" id="quickIn" maxlength="6" placeholder="ABC123" />
+          <button class="act" id="btnQuickJoin" disabled>Connect</button>
+        </div>
+      </div>
+      <!-- manual fallback: hidden unless quick connect fails (owner decision 2026-07-09) -->
+      <div class="step" id="manualRecv" style="display:none">
+        <div class="mono-note">Manual fallback</div>
+        <h3>Paste the sender's code</h3>
+        <textarea id="offerIn" placeholder="(paste the sender's code here)"></textarea>
+        <div class="hint">Click create, then copy the reply code and send it back (WhatsApp, etc.).</div>
+        <button class="act" id="btnCreateAnswer">Create reply code</button>
+        <textarea id="answerOut" readonly placeholder="(your reply code appears here)"></textarea>
+        <button class="ghost" id="btnCopyAnswer">Copy reply code</button>
+      </div>
+      <div class="step">
+        <h3><span class="stepno">2.</span>Deliver to</h3>
+        <div class="pathline" id="saveDirText">…</div>
+        <div class="row">
+          <button class="ghost" id="btnChangeDir">Change folder…</button>
+          <button class="dashed" id="btnResetDir">Use default (Downloads)</button>
+        </div>
+      </div>
+      <div class="step endstep">
+        <div class="result" id="recvResult"></div>
+        <div style="margin-top:10px" class="row">
+          <button class="danger" id="btnRecvCancel" style="display:none">✕ Cancel transfer</button>
+          <button class="ghost" id="btnRecvNew" style="display:none">Home</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-side">
+      <!-- incoming file: appears when the sender offers a file; nothing downloads silently.
+           The dashed placeholder shows whenever the card is hidden (pure CSS swap). -->
+      <div class="incoming" id="incomingCard" style="display:none">
+        <h3>Incoming parcel</h3>
+        <div class="inc-body">
+          <div class="incname" id="incName"></div>
+          <div class="incsize" id="incSize"></div>
+          <div id="recvPassWrap" style="display:none">
+            <input type="password" id="recvPass" placeholder="Password" />
+          </div>
+          <div class="incmsg" id="incMsg"></div>
+          <button class="act" id="btnAccept">↓ Accept &amp; receive</button>
+          <button class="danger" id="btnDecline">Decline</button>
+        </div>
+      </div>
+      <div class="placeholder" id="noParcel" style="display:none">
+        <div class="ph-circle">↓</div>
+        <div class="ph-label">No incoming parcel yet</div>
+        <div class="ph-copy">Connect with a code and the sender's offer will appear here.</div>
+      </div>
+      <div class="transit">
+        <div class="t-label">Transit</div>
+        <div class="lane">
+          <div class="bar"><span id="recvBar"></span></div>
+        </div>
+        <div class="t-ends"><span>Sender</span><span>You</span></div>
+        <div class="progtext" id="recvProg">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><span id="ver"></span> · Files go straight from your device to theirs</div>
+
+  <script src="../../shared/vendor/pako.min.js"></script>
+  <script src="../../shared/engine.js"></script>
+  <script src="lifecycle.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

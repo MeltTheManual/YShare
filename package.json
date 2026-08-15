@@ -1,0 +1,48 @@
+{
+  "name": "yshare",
+  "productName": "YShare",
+  "version": "0.0.12",
+  "private": true,
+  "description": "Free peer-to-peer file and folder transfer for desktop and mobile.",
+  "main": "src/main.js",
+  "author": "YShare",
+  "license": "MIT",
+  "scripts": {
+    "check:syntax": "node --check shared/engine.js && node --check src/main.js && node --check src/main-security.js && node --check src/preload.js && node --check src/renderer/lifecycle.js && node --check src/renderer/renderer.js && node --check signaling/server.js && node --check signaling/test-client.js",
+    "start": "electron .",
+    "test": "node --test tests/*.test.js",
+    "verify": "npm run check:syntax && npm test && npm --prefix signaling test && npm --prefix mobile run lint && npm --prefix mobile run typecheck && npm --prefix mobile test -- --runInBand --watch=false",
+    "dist": "electron-builder --win nsis",
+    "dist:portable": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.yshare.app",
+    "productName": "YShare",
+    "files": [
+      "src/**/*",
+      "shared/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "artifactName": "YShare-Setup-${version}.exe",
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "YShare-portable-${version}.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "42.6.1",
+    "electron-builder": "^26.15.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MeltTheManual/YShare.git"
+  }
+}
