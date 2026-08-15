@@ -46,8 +46,17 @@ only. Add TURN later only if the networks you use cannot connect directly.
 You have two ways to connect:
 
 - **Quick Connect:** enter the address of a YShare server you run or trust, then use a six-character code.
-- **Manual Connect:** exchange the longer offer and reply codes yourself. It works without a Quick Connect
-  server. Without TURN, the devices still need a direct network path.
+- **Serverless Link:** create a connection link and send it through WhatsApp or another chat. The receiver
+  taps it, YShare opens with the connection ready, and the receiver sends one reply link back. It works
+  without a Quick Connect server. Without TURN, the devices still need a direct network path.
+
+The serverless link uses a small static webpage to open the installed YShare app on Windows or Android.
+The connection details stay after the `#` in the address, so GitHub Pages does not receive them in the web
+request. The chat used to send the link can still see the message. The webpage stores nothing and never
+receives file bytes.
+
+The connector is still long underneath the link. The chat must preserve the complete address. If a link is
+shortened or broken, create a fresh one, try another chat, or use Quick Connect.
 
 Both devices must use the same Quick Connect server because that is the meeting point where they exchange
 temporary connection information. For example, if the server is `wss://signal.example.com`, enter that exact
@@ -58,8 +67,8 @@ address on the computer and the phone. The address is a setting, not code that m
 <img alt="A plain-language connection guide: an open direct path moves the file, a blocked direct path uses TURN when available, and a blocked path without TURN has no route." src="docs/assets/readme-connection-help-v1.png">
 
 A six-character code proves that the devices met through the same Quick Connect server. It does not prove
-that the network will allow a path for the file. Manual Connect replaces that introduction step with offer
-and reply codes. Without TURN, it still needs the networks to allow a direct path.
+that the network will allow a path for the file. A Serverless Link replaces that introduction step with an
+offer link and a reply link. Without TURN, it still needs the networks to allow a direct path.
 
 - **Same normal Wi-Fi:** a direct transfer usually works without TURN.
 - **Guest, hotel, school, or office Wi-Fi:** the network may isolate devices, even when both show the same
@@ -96,7 +105,7 @@ mobile/              Android app
 shared/engine.js     Connection, validation, transfer, and hashing rules shared by both apps
 signaling/           Optional short-code introduction service and TURN credential service
 tests/               Shared, desktop, signaling, and end-to-end checks
-docs/                Self-hosting guide and README artwork
+docs/                Self-hosting guide, connection bridge, and README artwork
 ```
 
 The desktop and Android apps are separate programs, but they use the same protocol engine. A change to a

@@ -125,9 +125,12 @@ test('quick connect stays closed until a server is configured, on both entry poi
     'the startup promise must not be used as the answer, only as a wait');
   assert.equal((renderer.match(/serverReady \? await fetchTurnCreds\(\) : null/g) || []).length, 2,
     'both manual paths must stay direct-only when no server is configured');
-  assert.match(renderer,
-    /if \(!owner\.sending \|\| !owner\.localSendComplete \|\| typeof m\.ok !== 'boolean'\)/,
-    'no receiver ACK may finish the sender before its local send drains');
+  assert.match(renderer, /completionAckAction\(\{/,
+    'receiver ACK timing must use the tested shared completion gate');
+  assert.match(renderer, /if \(action === 'queue'\) \{\s*owner\.pendingAck/,
+    'a valid early ACK must wait until the local send drains');
+  assert.match(renderer, /function markLocalSendComplete\(owner\)/,
+    'local completion must consume a queued ACK');
   assert.match(main, /COPYFILE_EXCL/,
     'filesystems without hard links must still publish with exclusive creation');
   assert.doesNotMatch(main, /fs\.promises\.rename\(/,
@@ -180,10 +183,10 @@ test('desktop release guards cover stale callbacks, destination reservations, an
     'manual receiver creation must invalidate Quick Connect before its first await');
   assert.match(renderer, /reloadInProgress = true;\s*retireSenderQuickAttempt\(\);\s*retireReceiverQuickAttempt\(\);/,
     'Home/reload cleanup must retire both signaling sockets before awaiting cleanup');
-  assert.doesNotMatch(renderer.slice(renderer.indexOf('// --- quick connect (sender)'), renderer.indexOf('// --- manual fallback (sender)')),
+  assert.doesNotMatch(renderer.slice(renderer.indexOf('// --- quick connect (sender)'), renderer.indexOf('// --- serverless fallback (sender)')),
     /abandonSenderAttempt\(S\)|const owner = S/,
     'Quick sender callbacks must never act on the mutable global owner');
-  assert.doesNotMatch(renderer.slice(renderer.indexOf('// --- quick connect (receiver)'), renderer.indexOf('// --- manual fallback (receiver)')),
+  assert.doesNotMatch(renderer.slice(renderer.indexOf('// --- quick connect (receiver)'), renderer.indexOf('// --- serverless fallback (receiver)')),
     /abandonReceiverAttempt\(R\)|const owner = R/,
     'Quick receiver callbacks must never act on the mutable global owner');
   assert.doesNotMatch(renderer, /discarded/,
@@ -191,7 +194,7 @@ test('desktop release guards cover stale callbacks, destination reservations, an
   assert.match(renderer, /Cleanup could not be confirmed\. Close YShare and manually delete/);
 });
 
-test('Manual Connect copy states the direct-network boundary on both platforms', () => {
+test('serverless connection copy states the direct-network boundary on both platforms', () => {
   const desktopHtml = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'index.html'), 'utf8');
   const desktopRenderer = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'renderer.js'), 'utf8');
   const mobile = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'App.tsx'), 'utf8');
@@ -200,8 +203,35 @@ test('Manual Connect copy states the direct-network boundary on both platforms',
   const combined = [desktopHtml, desktopRenderer, mobile, readme, selfHosting].join('\n');
 
   assert.doesNotMatch(combined, /no server at all|no server whatsoever/i);
-  assert.match(desktopHtml, /without a Quick Connect server/);
-  assert.match(mobile, /without a Quick Connect server/);
+  assert.match(desktopHtml, /serverless connection link/);
+  assert.match(mobile, /serverless connection link/);
   assert.match(readme, /Without TURN, the devices still need a direct network path\./);
   assert.match(selfHosting, /direct\/STUN-only/);
+});
+
+test('connection links use validated OS handlers and a fragment-only HTTPS bridge', () => {
+  const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main.js'), 'utf8');
+  const preload = fs.readFileSync(path.join(__dirname, '..', 'src', 'preload.js'), 'utf8');
+  const renderer = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'renderer.js'), 'utf8');
+  const manifest = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'android', 'app', 'src', 'main', 'AndroidManifest.xml'), 'utf8');
+  const bridge = fs.readFileSync(path.join(__dirname, '..', 'docs', 'connect', 'index.html'), 'utf8');
+
+  assert.match(main, /app\.requestSingleInstanceLock\(\)/,
+    'a clicked reply must reach the sender process that still owns its WebRTC offer');
+  assert.match(main, /app\.on\('second-instance'/);
+  assert.match(main, /app\.setAsDefaultProtocolClient\('yshare'/);
+  assert.match(main, /engine\.parseConnectionLink\(value\)/,
+    'main must validate an OS-supplied URL before sending it to the renderer');
+  assert.match(preload, /ipcRenderer\.on\('connection-link', listener\)/);
+  assert.match(renderer, /window\.yshare\.onConnectionLink\(importConnectionLink\)/);
+  assert.match(manifest, /android:scheme="yshare" android:host="connect"/);
+  assert.match(manifest, /android\.intent\.category\.BROWSABLE/);
+
+  assert.match(bridge, /location\.hash\.slice\(1\)/,
+    'the bridge must read the connector from the fragment, not a server-visible query');
+  assert.match(bridge, /yshare:\/\/connect\/#/);
+  assert.doesNotMatch(bridge, /fetch\(|XMLHttpRequest|WebSocket/,
+    'the static bridge must not send the connector anywhere');
+  assert.doesNotMatch(bridge, /location\.(search|pathname)/,
+    'the connector route must stay in the URL fragment');
 });

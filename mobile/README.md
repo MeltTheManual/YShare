@@ -74,6 +74,10 @@ Then run `build-release.bat` or `gradlew.bat assembleRelease`. Never commit thos
 Quick Connect in a release build needs a `wss://` signaling server, which each person configures in the app
 itself — nothing is compiled in. See `docs/SELF-HOSTING.md`.
 
+An installed Android build also registers the `yshare://connect/` app link used by YShare's static HTTPS
+bridge. Tapping a valid connection link opens the app and fills the serverless offer or reply. The app still
+validates the complete connector before using it, and receiving still requires a visible Accept action.
+
 ## Application ID
 
 The application ID is **`app.yshare`** (settled 14 August 2026). This is permanent: Android identifies and

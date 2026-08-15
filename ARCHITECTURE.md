@@ -90,11 +90,18 @@ Platform adapters must still perform a canonical containment check immediately b
 The room code is an invitation, not authenticated identity. The later local offer review and optional
 password remain mandatory product gates.
 
-### 3.2 Manual fallback
+### 3.2 Serverless link fallback
 
-When quick signaling is unavailable, the sender exposes the long offer code and the receiver returns a long
-answer code through any existing communication channel. The same WebRTC, consent, validation, transfer, and
-integrity paths are used.
+When Quick Connect is unavailable, the sender wraps the offer connector in a versioned HTTPS link and the
+receiver returns an answer link through any existing communication channel. Android and Windows register
+the `yshare://connect/` application protocol. A static page at `docs/connect/index.html` validates the URL
+fragment and opens that local protocol. The connector stays after `#`, so it is not part of the HTTP request.
+The communication service carrying the message can still see the link.
+
+Both apps validate the link and its decoded connector before using it. An offer link can start a fresh
+receiver session. An answer link is accepted only by the sender process that still owns the matching live
+offer. Opening an answer after the sender app was closed cannot restore the lost WebRTC state. The same
+WebRTC, consent, validation, transfer, and integrity paths are used.
 
 Without a safe TURN grant the manual path is direct/STUN-only. That can fail for CGNAT/symmetric-NAT pairs;
 it must not silently fall back to insecure production transport.
@@ -133,7 +140,7 @@ YShare ships with no signaling address. `shared/engine.js` owns the whole policy
 - `signalEndpointIssue()` refuses cleartext to a remote host; loopback cleartext is allowed so a person can
   test against a server on their own machine. Platforms pass `allowInsecure` only for development builds.
 - `configureSignaling()` is the single entry point; nothing else may set the active endpoint. With none set,
-  `signalDial()` rejects and `fetchTurnCreds()` resolves null, so Quick Connect fails closed to manual codes.
+  `signalDial()` rejects and `fetchTurnCreds()` resolves null, so Quick Connect fails closed to serverless links.
 
 Each platform stores the chosen address itself — desktop in `settings.json` (validated in main before it is
 stored), Android in a small app-private JSON file — and re-validates on load. A regression test fails the
@@ -279,7 +286,7 @@ current public Downloads path requires Android 10 / API 29 or newer.
 
 Normal React Native debug APKs do not embed the JavaScript bundle and require Metro. Release APKs bundle JS
 and Gradle requires real external signing. A release build therefore reaches a `wss://` server only, and
-falls back to manual codes when the person has configured nothing.
+falls back to serverless links when the person has configured nothing.
 
 ## 8. Trust and security boundary
 

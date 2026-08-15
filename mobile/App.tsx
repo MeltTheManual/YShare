@@ -19,10 +19,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BackHandler,
+  Linking,
   NativeEventEmitter,
   NativeModules,
   PermissionsAndroid,
   Platform,
+  Share as NativeShare,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -33,7 +35,6 @@ import {
 } from 'react-native';
 import { RTCPeerConnection, RTCSessionDescription } from 'react-native-webrtc';
 import RNBlobUtil from 'react-native-blob-util';
-import Clipboard from '@react-native-clipboard/clipboard';
 import { pick, pickDirectory, keepLocalCopy, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import { FileSystem } from 'react-native-file-access';
 import mobilePackage from './package.json';
@@ -54,6 +55,9 @@ import {
   base64ToU8,
   encodeDescs,
   decodeCode,
+  createConnectionLink,
+  parseConnectionLink,
+  completionAckAction,
   connRange,
   validateOfferFile,
   validateOfferFolder,
@@ -146,6 +150,15 @@ function b64Bytes(s: string): number {
   return n;
 }
 
+function connectorFromInput(value: string, expectedKind: 'offer' | 'answer'): string {
+  const raw = String(value || '').trim();
+  let parsed = null;
+  try { parsed = parseConnectionLink(raw); } catch {}
+  if (!parsed) return raw;
+  if (parsed.kind !== expectedKind) throw new Error('wrong connection link kind');
+  return parsed.code;
+}
+
 // Wait until a data channel's send buffer drains below the low threshold.
 // Uses the bufferedamountlow event when the lib fires it, plus a 100ms poll as a
 // belt-and-braces fallback (react-native-webrtc event support varies by version).
@@ -183,7 +196,7 @@ function waitDrain(dc: any): Promise<void> {
 
 // ---- quick connect server (deliberately NOT compiled into the app) ---------
 // YShare runs no server, so this install has to be told which signaling service
-// to use for the 6-character code. Manual codes work with it unset. Stored as a
+// to use for the 6-character code. Serverless connection links work with it unset. Stored as a
 // tiny JSON file next to the app's other private data; validated by the shared
 // engine so Android and desktop accept exactly the same addresses.
 const SETTINGS_NAME = 'yshare-settings.json';
@@ -263,8 +276,7 @@ function App(): React.JSX.Element {
   const [quickCodeOut, setQuickCodeOut] = useState(''); // sender: 6-char code to show
   const [quickIn, setQuickIn] = useState('');           // receiver: 6-char code typed in
   const sigRef = useRef<any>(null);                     // live signaling connection
-  // Manual long-code cards stay HIDDEN unless quick connect actually fails
-  // (owner decision 2026-07-09): the manual path is insurance, not a feature.
+  // Serverless connection cards stay hidden unless Quick Connect is unavailable.
   const [showManual, setShowManual] = useState(false);
   // A transfer reached an end state (done/declined/cancelled/failed) — offer
   // the "↺ New transfer" reset back to the hero screen (owner request 2026-07-11).
@@ -276,6 +288,7 @@ function App(): React.JSX.Element {
   const sendStartRef = useRef(0);
   const sendingRef = useRef(false);
   const sendDataCompleteRef = useRef(false);                // all local bytes/messages queued
+  const pendingSendAckRef = useRef<any>(null);              // valid early ACK waits for local queue completion
   const creatingRef = useRef(false);
 
   const pcsRef = useRef<any[]>([]);
@@ -378,7 +391,7 @@ function App(): React.JSX.Element {
     applySignal('');
     const stored = await writeSignalSetting('');
     setSrvMsg(stored
-      ? 'removed. Manual Connect still works without a Quick Connect server'
+      ? 'removed. Serverless connection links still work without a Quick Connect server'
       : 'removed for now, but this phone would not let YShare forget it');
   }
 
@@ -468,6 +481,7 @@ function App(): React.JSX.Element {
     if (sendFinishedRef.current) return false;
     sendFinishedRef.current = true;
     sendCancelledRef.current = true;
+    pendingSendAckRef.current = null;
     setSendActive(false);
     setFlowDone(true);
     setStatus(message);
@@ -1249,6 +1263,7 @@ function App(): React.JSX.Element {
     sendTeardown(true);   // fresh start — but the live handshake socket stays open
     sendingRef.current = false;
     sendDataCompleteRef.current = false;
+    pendingSendAckRef.current = null;
     sentRef.current = 0;
     sendCancelledRef.current = false;
     sendFinishedRef.current = false;
@@ -1317,8 +1332,8 @@ function App(): React.JSX.Element {
     }, CONNECT_TIMEOUT_MS);
   }
 
-  // Manual flow: long code shown for copy-paste. Relay creds fetched over HTTP
-  // when our box is reachable; otherwise direct-only (still free, still works).
+  // Serverless flow: connector details are hidden inside an HTTPS share link.
+  // Relay credentials are used when the configured server provides them.
   async function createSendCode() {
     if ((!pickedRef.current && !pickedFolderRef.current) || creatingRef.current) return;
     creatingRef.current = true;
@@ -1328,7 +1343,7 @@ function App(): React.JSX.Element {
       const turn = await fetchTurnCreds();
       const c = await buildSendOffers(buildRtcConfig(turn));
       setSendCode(c);
-      setStatus('code ready — send it to the receiver' + (turn ? '' : ' (direct-only)'));
+      setStatus('Connection link ready. Share it with the receiver' + (turn ? '.' : ' (direct-only).'));
     } catch (e: any) {
       setStatus('error: ' + (e?.message || 'failed'));
     } finally {
@@ -1338,9 +1353,9 @@ function App(): React.JSX.Element {
 
   async function connectAndSend() {
     try {
-      await applySendAnswers(decodeCode(replyIn));
+      await applySendAnswers(decodeCode(connectorFromInput(replyIn, 'answer')));
     } catch (e: any) {
-      setStatus('bad reply code: ' + (e?.message || ''));
+      setStatus('bad reply link: ' + (e?.message || ''));
     }
   }
 
@@ -1352,7 +1367,7 @@ function App(): React.JSX.Element {
     await settingsReady();
     if (!signalReadyRef.current) {
       setShowManual(true);
-      setStatus('quick connect needs a server — set one on the home screen, or use the manual code');
+      setStatus('Quick Connect needs a server. Set one on the home screen, or use the serverless link.');
       return;
     }
     creatingRef.current = true;
@@ -1390,13 +1405,13 @@ function App(): React.JSX.Element {
             setStatus('connect server: ' + m.why);
           }
         } catch {
-          setStatus('quick connect failed — manual codes unlocked below');
+          setStatus('Quick Connect failed. The serverless connection is unlocked below.');
           setShowManual(true);
         }
       };
       sig.send({ t: 'create' });
     } catch {
-      setStatus('quick connect unavailable — manual codes unlocked below');
+      setStatus('Quick Connect is unavailable. The serverless connection is unlocked below.');
       setShowManual(true);
     } finally {
       creatingRef.current = false;
@@ -1451,16 +1466,17 @@ function App(): React.JSX.Element {
         }
         finishSender('receiver cancelled ✗', 200);
       } else if (m.type === 'ack') {
-        if (!sendingRef.current || !sendDataCompleteRef.current
-          || m.tid !== tidRef.current || typeof m.ok !== 'boolean') {
+        const action = completionAckAction({
+          sending: sendingRef.current,
+          localComplete: sendDataCompleteRef.current,
+          pending: !!pendingSendAckRef.current,
+        }, m, tidRef.current);
+        if (action === 'reject') {
           finishSender('receiver sent an invalid completion response');
           return;
         }
-        paintSendProgress();
-        if (m.ok) setBarPct(100);   // receiver confirmed intact — fill the lane to the end dot
-        finishSender(m.ok
-          ? 'receiver verified the file ✓ — transfer complete'
-          : 'receiver could not complete the save ✗', 0);
+        if (action === 'queue') pendingSendAckRef.current = m;
+        else finishAcceptedSendAck(m);
       }
     } catch {
       finishSender('receiver sent invalid control data');
@@ -1519,8 +1535,7 @@ function App(): React.JSX.Element {
         const control = sendCtrlRef.current;
         if (!control || control.readyState !== 'open') throw new Error('control channel closed before folder completion');
         control.send(JSON.stringify({ type: 'folder-sent', tid: tidRef.current, count: fol.files.length }));
-        sendDataCompleteRef.current = true;
-        paintSendProgress(true);
+        markSendDataComplete();
       }
     } catch (e: any) {
       if (!sendCancelledRef.current && !sendFinishedRef.current) {
@@ -1552,8 +1567,7 @@ function App(): React.JSX.Element {
         return sendRange(dc, f.path, start, end);
       }));
       if (!sendCancelledRef.current) {
-        sendDataCompleteRef.current = true;
-        paintSendProgress(true);
+        markSendDataComplete();
       }
     } catch (e: any) {
       // source file unreadable mid-send, or a channel died under us
@@ -1634,10 +1648,35 @@ function App(): React.JSX.Element {
     abortReceive(true, 'cancelled — the incomplete file was discarded');
   }
 
-  function copyReply() {
-    if (!reply) return;
-    Clipboard.setString(reply);
-    setStatus('reply copied ✓ — paste it back to your PC');
+  async function shareConnector(kind: 'offer' | 'answer', connector: string) {
+    try {
+      const link = createConnectionLink(kind, connector);
+      await NativeShare.share({
+        title: kind === 'offer' ? 'YShare connection' : 'YShare reply',
+        message: link,
+      });
+      setStatus(kind === 'offer' ? 'connection link ready to send' : 'reply link ready to send');
+    } catch (e: any) {
+      setStatus('could not share the connection link: ' + (e?.message || 'try again'));
+    }
+  }
+
+  function finishAcceptedSendAck(message: any) {
+    if (!sendDataCompleteRef.current || sendFinishedRef.current) return;
+    pendingSendAckRef.current = null;
+    paintSendProgress();
+    if (message.ok) setBarPct(100);
+    const what = pickedFolderRef.current ? 'folder' : 'file';
+    finishSender(message.ok
+      ? `receiver verified the ${what} ✓, transfer complete`
+      : `receiver could not complete the ${what} save ✗`, 0);
+  }
+
+  function markSendDataComplete() {
+    if (sendCancelledRef.current || sendFinishedRef.current) return;
+    sendDataCompleteRef.current = true;
+    paintSendProgress(true);
+    if (pendingSendAckRef.current) finishAcceptedSendAck(pendingSendAckRef.current);
   }
 
   // Answer a decoded offers array with the given RTC config; resets all receive
@@ -1748,17 +1787,18 @@ function App(): React.JSX.Element {
     return encodeDescs(answers);
   }
 
-  // Manual flow: paste the long code, produce a long reply to send back.
+  // Serverless flow: open the sender link, then produce a reply link.
   async function createReply(codeArg?: any) {
     try {
-      const raw = typeof codeArg === 'string' ? codeArg : code;
+      const input = typeof codeArg === 'string' ? codeArg : code;
+      const raw = connectorFromInput(input, 'offer');
       setStatus('creating reply…');
       setReply('');
       const offers = decodeCode(raw);
       const turn = await fetchTurnCreds();
       const r = await answerOffers(offers, buildRtcConfig(turn));
       setReply(r);
-      setStatus(`reply ready (${offers.length} conns) — send it back to your PC`);
+      setStatus(`Reply link ready (${offers.length} connections). Share it back with the sender.`);
       return r;
     } catch (e: any) {
       setStatus('error: ' + (e?.message || 'failed'));
@@ -1766,7 +1806,7 @@ function App(): React.JSX.Element {
   }
 
   // Quick flow (receiver): type the sender's 6-char code — everything else is
-  // automatic (the long codes ride the signaling server).
+  // automatic because the connector details ride the signaling server.
   async function joinQuick() {
     const c = quickIn.trim().toUpperCase();
     if (c.length !== 6) {
@@ -1776,7 +1816,7 @@ function App(): React.JSX.Element {
     await settingsReady();
     if (!signalReadyRef.current) {
       setShowManual(true);
-      setStatus('quick connect needs a server — set one on the home screen, or use the manual code');
+      setStatus('Quick Connect needs a server. Set one on the home screen, or use the serverless link.');
       return;
     }
     let quickTurn: any = null;
@@ -1806,16 +1846,64 @@ function App(): React.JSX.Element {
             setStatus('connect server: ' + m.why);
           }
         } catch (e: any) {
-          setStatus('quick connect failed: ' + (e?.message || 'manual codes unlocked below'));
+          setStatus('quick connect failed: ' + (e?.message || 'serverless connection unlocked below'));
           setShowManual(true);
         }
       };
       sig.send({ t: 'join', code: c });
     } catch {
-      setStatus('quick connect unavailable — manual codes unlocked below');
+      setStatus('Quick Connect is unavailable. The serverless connection is unlocked below.');
       setShowManual(true);
     }
   }
+
+  const handleConnectionUrl = useCallback((value: string | null) => {
+    if (!value) return;
+    let parsed = null;
+    try { parsed = parseConnectionLink(value); } catch {}
+    if (!parsed) {
+      setStatus('that YShare connection link is invalid or incomplete');
+      return;
+    }
+    const busy = sendingRef.current || recvActive || acceptedRef.current
+      || sendFinishedRef.current || recvTerminalRef.current;
+    if (parsed.kind === 'offer') {
+      if (busy || sendPcsRef.current.length || pcsRef.current.length) {
+        setStatus('finish the current connection before opening another one');
+        return;
+      }
+      setMode('recv');
+      setShowManual(true);
+      setCode(parsed.code);
+      setStatus('Connection link ready. Tap Create reply link.');
+      return;
+    }
+    if (pcsRef.current.length || acceptedRef.current || recvTerminalRef.current
+      || sendingRef.current || sendFinishedRef.current) {
+      setStatus('Finish the current connection before opening another one.');
+      return;
+    }
+    setMode('send');
+    setShowManual(true);
+    setReplyIn(parsed.code);
+    if (sendPcsRef.current.length !== NUM_CONNS) {
+      setStatus('open this reply on the sender device while its original connection is still waiting');
+      return;
+    }
+    setStatus('Reply link ready. Tap Connect & send.');
+  }, [recvActive]);
+
+  useEffect(() => {
+    let alive = true;
+    Linking.getInitialURL().then((value) => {
+      if (alive) handleConnectionUrl(value);
+    }).catch(() => {});
+    const subscription = Linking.addEventListener('url', (event) => handleConnectionUrl(event.url));
+    return () => {
+      alive = false;
+      subscription.remove();
+    };
+  }, [handleConnectionUrl]);
 
   return (
     <View style={styles.root}>
@@ -1866,7 +1954,7 @@ function App(): React.JSX.Element {
                     YShare has no server of its own. Nothing you send passes through us. The
                     6-character code needs a small connect-me service to introduce the two
                     devices. Run your own (see SELF-HOSTING.md) or paste one you trust. Leave it
-                    empty to use Manual Connect without a Quick Connect server. Without TURN,
+                    empty to use a serverless connection link. Without TURN,
                     the devices still need a direct path.
                   </Text>
                   <TextInput
@@ -1979,35 +2067,29 @@ function App(): React.JSX.Element {
             {showManual ? (
               <>
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Manual fallback · Create your code</Text>
+                  <Text style={styles.cardTitle}>Serverless connection · Create a share link</Text>
                   <TouchableOpacity
                     style={[styles.btn, !pickedLabel && styles.btnDisabled]}
                     disabled={!pickedLabel}
                     onPress={createSendCode}>
-                    <Text style={[styles.btnText, !pickedLabel && styles.btnDisabledText]}>CREATE CODE</Text>
+                    <Text style={[styles.btnText, !pickedLabel && styles.btnDisabledText]}>CREATE SHARE LINK</Text>
                   </TouchableOpacity>
                   {sendCode ? (
                     <>
                       <TouchableOpacity
                         style={styles.btnGhost}
-                        onPress={() => {
-                          Clipboard.setString(sendCode);
-                          setStatus('code copied ✓ — send it to the receiver');
-                        }}>
-                        <Text style={styles.btnGhostText}>COPY CODE</Text>
+                        onPress={() => shareConnector('offer', sendCode)}>
+                        <Text style={styles.btnGhostText}>SHARE CONNECTION</Text>
                       </TouchableOpacity>
-                      <Text selectable numberOfLines={4} style={styles.replyText}>
-                        {sendCode}
-                      </Text>
                     </>
                   ) : null}
                 </View>
 
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Manual fallback · Paste their reply, then connect</Text>
+                  <Text style={styles.cardTitle}>Serverless connection · Open their reply, then connect</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="(paste the reply code here)"
+                    placeholder="(the reply link appears here)"
                     placeholderTextColor={C.footer}
                     multiline
                     autoCapitalize="none"
@@ -2047,10 +2129,10 @@ function App(): React.JSX.Element {
 
             {showManual ? (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>Manual fallback · Paste the sender's code</Text>
+                <Text style={styles.cardTitle}>Serverless connection · Open the sender's link</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="(paste the connector code from the sender)"
+                  placeholder="(the sender's connection appears here)"
                   placeholderTextColor={C.footer}
                   multiline
                   autoCapitalize="none"
@@ -2059,20 +2141,17 @@ function App(): React.JSX.Element {
                   onChangeText={setCode}
                 />
                 <TouchableOpacity style={styles.btn} onPress={createReply}>
-                  <Text style={styles.btnText}>CREATE REPLY CODE</Text>
+                  <Text style={styles.btnText}>CREATE REPLY LINK</Text>
                 </TouchableOpacity>
               </View>
             ) : null}
 
             {reply ? (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>2 · Send this reply code back</Text>
-                <TouchableOpacity style={styles.btnGhost} onPress={copyReply}>
-                  <Text style={styles.btnGhostText}>COPY REPLY CODE</Text>
+                <Text style={styles.cardTitle}>2 · Share this reply link</Text>
+                <TouchableOpacity style={styles.btnGhost} onPress={() => shareConnector('answer', reply)}>
+                  <Text style={styles.btnGhostText}>SHARE REPLY</Text>
                 </TouchableOpacity>
-                <Text selectable style={styles.replyText}>
-                  {reply}
-                </Text>
               </View>
             ) : null}
 

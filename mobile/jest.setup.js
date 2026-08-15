@@ -48,11 +48,6 @@ jest.mock('react-native-blob-util', () => ({
   },
 }));
 
-jest.mock('@react-native-clipboard/clipboard', () => ({
-  __esModule: true,
-  default: { setString: jest.fn(), getString: jest.fn(() => Promise.resolve('')) },
-}));
-
 jest.mock('@react-native-documents/picker', () => ({
   pick: jest.fn(),
   pickDirectory: jest.fn(),

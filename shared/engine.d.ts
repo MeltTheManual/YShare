@@ -45,6 +45,15 @@ export function u8ToBase64(bytes: Uint8Array): string;
 export function base64ToU8(str: string): Uint8Array;
 export function encodeDescs(descs: any[]): string;
 export function decodeCode(code: string): any;
+export const CONNECTION_LINK_BASE: string;
+export const APP_LINK_BASE: string;
+export function createConnectionLink(kind: 'offer' | 'answer', code: string): string;
+export function parseConnectionLink(value: unknown): { kind: 'offer' | 'answer'; code: string } | null;
+export function completionAckAction(
+  state: { sending: boolean; localComplete: boolean; pending: boolean },
+  message: { tid?: unknown; ok?: unknown } | null,
+  transferId: string,
+): 'reject' | 'queue' | 'finish';
 export function connRange(i: number, size: number, n: number): { start: number; end: number };
 export function safeFileName(value: unknown, fallback?: string): string;
 export function safeRelativePath(value: unknown): string;

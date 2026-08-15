@@ -7,10 +7,12 @@ a server you control or trust.
 **You do not edit YShare's code to add a server.** Run the included service, then
 paste its `wss://` address into the Quick connect server setting on both devices.
 
-**You may not need to configure a YShare server.** Manual Connect lets the two
-devices exchange the longer offer and reply codes by hand. Without a configured
-TURN service, that path is direct/STUN-only and can still fail on a restrictive
-network. Quick Connect exists to replace the long codes with a short code.
+**You may not need to configure a YShare server.** A Serverless Link lets the
+sender share one connection link and the receiver send one reply link back. The
+links open YShare with the connector details already filled in, so nobody has to
+copy the long connector text. Without a configured TURN service, that path is
+direct/STUN-only and can still fail on a restrictive network. Quick Connect
+replaces the two-link exchange with one six-character code.
 
 ---
 
@@ -121,9 +123,8 @@ Wi-Fi isolates devices, a firewall blocks peer traffic, or a mobile carrier uses
 | Direct route blocked, TURN configured | Encrypted file bytes can pass through your relay. | Check coturn, its firewall ports, and bandwidth limits. |
 | Direct route blocked, no TURN configured | The devices have no usable route for the file. | Add TURN or move one device to a less restrictive network. |
 
-Manual Connect avoids the introduction server, but it does not bypass a blocked network. If both devices
-are online and a code works but the connection still fails, this can be a network limitation rather than an
-app defect.
+A Serverless Link avoids the introduction server, but it does not bypass a blocked network. If both devices
+open their links but the connection still fails, this can be a network limitation rather than an app defect.
 
 ---
 

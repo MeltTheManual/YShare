@@ -409,6 +409,9 @@
 
   // --- connector codes ---------------------------------------------------------
   const CODE_PREFIX = 'YS1.';
+  const CONNECTION_LINK_BASE = 'https://meltthemanual.github.io/YShare/connect/';
+  const APP_LINK_BASE = 'yshare://connect/';
+  const CONNECTION_LINK_VERSION = 'v1';
 
   // Array of N session descriptions → compact shareable code.
   function encodeDescs(descs) {
@@ -456,6 +459,61 @@
       parsed = JSON.parse(base64ToAscii(clean)); // legacy encoding, current N-connection shape
     }
     return validateDescriptionArray(parsed);
+  }
+
+  function connectorToLinkToken(code, expectedType) {
+    const clean = String(code).replace(/\s+/g, '');
+    validateDescriptionArray(decodeCode(clean), expectedType);
+    return clean.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  }
+
+  function linkTokenToConnector(token, expectedType) {
+    const raw = String(token);
+    if (!raw || raw.length > PROTOCOL_LIMITS.maxConnectorCodeChars || !/^[A-Za-z0-9._-]+$/.test(raw)) {
+      protocolError('bad connection link');
+    }
+    let code = raw.replace(/-/g, '+').replace(/_/g, '/');
+    while (code.length % 4) code += '=';
+    validateDescriptionArray(decodeCode(code), expectedType);
+    return code;
+  }
+
+  // The connector stays after #, so an HTTPS bridge can open the installed app
+  // without receiving the connector in its HTTP request. The chat app carrying
+  // the link can still see the message, just as it can see a pasted manual code.
+  function createConnectionLink(kind, code) {
+    const expectedType = kind === 'offer' ? 'offer' : kind === 'answer' ? 'answer' : null;
+    if (!expectedType) protocolError('bad connection link kind');
+    const token = connectorToLinkToken(code, expectedType);
+    return CONNECTION_LINK_BASE + '#' + CONNECTION_LINK_VERSION + '/' + kind + '/' + token;
+  }
+
+  function parseConnectionLink(value) {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    let route = '';
+    if (raw.startsWith(CONNECTION_LINK_BASE + '#')) {
+      route = raw.slice((CONNECTION_LINK_BASE + '#').length);
+    } else if (raw.startsWith(APP_LINK_BASE + '#')) {
+      route = raw.slice((APP_LINK_BASE + '#').length);
+    } else {
+      return null;
+    }
+    const match = new RegExp('^' + CONNECTION_LINK_VERSION + '/(offer|answer)/([A-Za-z0-9._-]+)$').exec(route);
+    if (!match) return null;
+    const kind = match[1];
+    const code = linkTokenToConnector(match[2], kind);
+    return { kind: kind, code: code };
+  }
+
+  // A receiver can verify a small fast transfer while the sender still has
+  // locally buffered bytes draining on another channel. That valid early ACK
+  // must wait, not become success yet and not be treated as an attack.
+  function completionAckAction(state, message, transferId) {
+    if (!state || !state.sending || state.pending || !message
+      || message.tid !== transferId || typeof message.ok !== 'boolean') {
+      return 'reject';
+    }
+    return state.localComplete ? 'finish' : 'queue';
   }
 
   // --- password gate helpers (Stage 3) -----------------------------------------
@@ -603,6 +661,11 @@
     base64ToU8,
     encodeDescs,
     decodeCode,
+    CONNECTION_LINK_BASE,
+    APP_LINK_BASE,
+    createConnectionLink,
+    parseConnectionLink,
+    completionAckAction,
     connRange,
     safeFileName,
     safeRelativePath,

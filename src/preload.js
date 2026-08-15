@@ -55,4 +55,12 @@ contextBridge.exposeInMainWorld('yshare', {
   getSignalEndpoint: () => ipcRenderer.invoke('get-signal-endpoint'),
   setSignalEndpoint: (value) => ipcRenderer.invoke('set-signal-endpoint', value),
   clearSignalEndpoint: () => ipcRenderer.invoke('clear-signal-endpoint'),
+
+  // Serverless offer and reply links arrive through the operating system. Main
+  // validates the URL before this narrow event reaches the unprivileged UI.
+  onConnectionLink: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('connection-link', listener);
+    return () => ipcRenderer.removeListener('connection-link', listener);
+  },
 });

@@ -10,7 +10,7 @@ Open an issue first for anything beyond a bug fix. The project has a narrow scop
 on purpose (see the current limits in `README.md`), and it is kinder to say "that does not fit" in an
 issue than on a finished pull request.
 
-Things that are **out of scope** for version 1: user accounts, cloud storage,
+Things that are **out of scope** for the current project: user accounts, cloud storage,
 chat, public file discovery, analytics, and advertising.
 
 ## Getting set up
@@ -25,8 +25,8 @@ npm run verify
 ```
 
 `npm start` runs the desktop app. `mobile/README.md` covers the Android setup.
-`docs/SELF-HOSTING.md` explains how to run a signaling server for Quick Connect —
-or skip it and test with the manual connection codes, which need no server.
+`docs/SELF-HOSTING.md` explains how to run a signaling server for Quick Connect.
+You can also test with the two serverless connection links, which need no signaling server.
 
 ## The rules that keep this app safe
 
@@ -110,7 +110,7 @@ Android that an update really came from you.
 ## Reporting bugs
 
 Include your platform and version, both devices' networks (same Wi-Fi or not),
-whether you used Quick Connect or a manual code, and what the app said. If a
+whether you used Quick Connect or a Serverless Link, and what the app said. If a
 transfer failed, the exact message from both ends helps enormously.
 
 Security problems go through `SECURITY.md` instead, not the public issue tracker.
