@@ -18,6 +18,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   BackHandler,
   Linking,
   NativeEventEmitter,
@@ -108,7 +109,9 @@ const FLUSH = 1024 * 1024;
 
 // Stage 2+3 product flow: the receiver must ACCEPT (with the password if the
 // sender set one) before any bytes flow; either side can cancel.
-const CONNECT_TIMEOUT_MS = 30000;
+const CONNECT_TIMEOUT_MS = 60000;
+const CANCEL_DRAIN_TIMEOUT_MS = 30000;
+const CANCEL_NOTICE_TIMEOUT_MS = 5000;   // how long an exit waits for the notice itself
 const PASSWORD_ATTEMPTS = 3;
 
 // Human-readable byte size (matches desktop fmt).
@@ -238,6 +241,7 @@ function App(): React.JSX.Element {
   const [pickedLabel, setPickedLabel] = useState('');
   const [sendCode, setSendCode] = useState('');
   const [replyIn, setReplyIn] = useState('');
+  const [replyImported, setReplyImported] = useState(false);
   // Stage 2+3 product flow state
   const [sendPass, setSendPass] = useState('');            // sender's optional password
   const [sendActive, setSendActive] = useState(false);     // sending → show Cancel
@@ -278,12 +282,17 @@ function App(): React.JSX.Element {
   const sigRef = useRef<any>(null);                     // live signaling connection
   // Serverless connection cards stay hidden unless Quick Connect is unavailable.
   const [showManual, setShowManual] = useState(false);
+  const [offerImported, setOfferImported] = useState(false);
   // A transfer reached an end state (done/declined/cancelled/failed) — offer
   // the "↺ New transfer" reset back to the hero screen (owner request 2026-07-11).
   const [flowDone, setFlowDone] = useState(false);
   const pickedRef = useRef<{ path: string; name: string; size: number } | null>(null);
   const sendPcsRef = useRef<any[]>([]);
   const sendDcsRef = useRef<any[]>([]);
+  // A pressed Cancel is not instant: the notice queues behind buffered file bytes.
+  // Track it so Home, Back, and New transfer can flush it instead of cutting it off.
+  const cancelNoticeRef = useRef<Promise<void> | null>(null);
+  const cancelHurryRef = useRef(false);
   const sentRef = useRef(0);
   const sendStartRef = useRef(0);
   const sendingRef = useRef(false);
@@ -491,7 +500,10 @@ function App(): React.JSX.Element {
     return true;
   }
 
-  function resetAll() {
+  async function resetAll() {
+    // Leaving must not cut off a cancel notice that is still on its way out.
+    await flushPendingCancel();
+    cancelHurryRef.current = false;
     cleanupSenderCache().catch(() => {});
     // Leaving the terminal result ends the temporary private-copy grace period.
     cleanupReceiveArtifacts(true).catch(() => {});
@@ -511,8 +523,10 @@ function App(): React.JSX.Element {
     setPickedLabel('');
     setSendCode('');
     setReplyIn('');
+    setReplyImported(false);
     setReply('');
     setCode('');
+    setOfferImported(false);
     setQuickIn('');
     setQuickCodeOut('');
     setSendPass('');
@@ -1483,25 +1497,66 @@ function App(): React.JSX.Element {
     }
   }
 
-  // Sender-side Cancel: also an end state — offer the fresh-start button after.
-  // Mid-transfer the control channel holds buffered
-  // file bytes AHEAD of the queued 'cancel' — tearing down on a fixed grace
-  // period lost the message (receiver showed "connection lost" instead of
-  // "sender cancelled", seen on-device 2026-07-10). Wait for the drain, capped.
-  function cancelSend() {
+  // `stopEarly` lets an exit path abandon the long file drain without abandoning
+  // the small notice that still has to go out after it.
+  async function waitSendBuffers(timeoutMs: number, channels = sendDcsRef.current,
+                                 stopEarly: (() => boolean) | null = null) {
+    const started = Date.now();
+    while (channels.some((dc: any) => dc?.readyState === 'open' && dc.bufferedAmount > 0)
+      && Date.now() - started < timeoutMs
+      && !(stopEarly && stopEarly())) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    }
+  }
+
+  // Stop new reads first, drain already queued file bytes, then send the final
+  // cancellation control message before WebRTC closes. "← HOME", hardware Back,
+  // and "↺ New transfer" all appear the moment Cancel is pressed, so the pending
+  // notice is tracked and those exits flush it instead of closing WebRTC
+  // mid-drain, which made the receiver say "connection lost" (review 2026-08-20).
+  async function cancelSend() {
     if (sendFinishedRef.current) return;
     const dc = sendCtrlRef.current;
-    try { dc?.send(JSON.stringify({ type: 'cancel', tid: tidRef.current })); } catch {}
+    const channels = sendDcsRef.current;
     finishSender('cancelled', -1);
-    const t0 = Date.now();
-    const drain = () => {
-      if (dc && dc.readyState === 'open' && dc.bufferedAmount > 0 && Date.now() - t0 < 3000) {
-        setTimeout(drain, 50);
-      } else {
-        setTimeout(sendTeardown, 200);   // let the final frame hit the wire
-      }
-    };
-    drain();
+    cancelHurryRef.current = false;
+    const notice = (async () => {
+      await waitSendBuffers(CANCEL_DRAIN_TIMEOUT_MS, channels, () => cancelHurryRef.current);
+      try { dc?.send(JSON.stringify({ type: 'cancel', tid: tidRef.current })); } catch {}
+      await waitSendBuffers(CANCEL_NOTICE_TIMEOUT_MS, dc ? [dc] : []);
+      await new Promise<void>((resolve) => setTimeout(resolve, 300));
+      sendTeardown();
+    })();
+    cancelNoticeRef.current = notice;
+    await notice;
+    if (cancelNoticeRef.current === notice) cancelNoticeRef.current = null;
+  }
+
+  // An exit gives up the rest of the file drain but still waits, briefly and
+  // visibly, for the cancel notice itself to leave. Bounded by
+  // CANCEL_NOTICE_TIMEOUT_MS so leaving can never hang.
+  async function flushPendingCancel() {
+    const pending = cancelNoticeRef.current;
+    if (!pending) return;
+    cancelHurryRef.current = true;
+    setStatus('sending the cancel notice…');
+    await pending.catch(() => {});
+    cancelNoticeRef.current = null;
+  }
+
+  // Stopping a transfer cannot be undone, so ask first (owner request 2026-08-20).
+  function confirmCancelSend() {
+    Alert.alert('Cancel this transfer?', 'The file will not be delivered.', [
+      { text: 'Keep sending', style: 'cancel' },
+      { text: 'Cancel transfer', style: 'destructive', onPress: () => { cancelSend(); } },
+    ]);
+  }
+
+  function confirmCancelReceive() {
+    Alert.alert('Cancel this transfer?', 'The partly received file will be deleted.', [
+      { text: 'Keep receiving', style: 'cancel' },
+      { text: 'Cancel transfer', style: 'destructive', onPress: () => { cancelReceive(); } },
+    ]);
   }
 
   // Folder send: stream files ONE AT A TIME, each split across the N connections
@@ -1679,9 +1734,21 @@ function App(): React.JSX.Element {
     if (pendingSendAckRef.current) finishAcceptedSendAck(pendingSendAckRef.current);
   }
 
+  function armReceiverConnectTimeout() {
+    if (recvTimerRef.current || offerRef.current || acceptedRef.current
+      || savingRef.current || recvCancelledRef.current || recvTerminalRef.current) return;
+    recvTimerRef.current = setTimeout(() => {
+      if (!offerRef.current && !acceptedRef.current && !savingRef.current
+        && !recvCancelledRef.current && !recvTerminalRef.current) {
+        setStatus(CONNECTION_FAILURE_HELP);
+        recvTeardown();
+      }
+    }, CONNECT_TIMEOUT_MS);
+  }
+
   // Answer a decoded offers array with the given RTC config; resets all receive
   // state and returns the encoded reply. Shared by the manual and quick flows.
-  async function answerOffers(offers: any[], rtcConfig: any): Promise<string> {
+  async function answerOffers(offers: any[], rtcConfig: any, connectTimeoutEnabled = false): Promise<string> {
     // The raw-IO fast path needs the Kotlin module baked into the APK. If the
     // JS is newer than the installed binary, fail loud instead of half-working.
     if (!YRawFile || !WebRTCModule) {
@@ -1763,11 +1830,16 @@ function App(): React.JSX.Element {
           const s = pc.connectionState;
           if (s === 'connected') {
             if (recvTimerRef.current) { clearTimeout(recvTimerRef.current); recvTimerRef.current = null; }
+          } else if (s === 'connecting' && connectTimeoutEnabled) {
+            armReceiverConnectTimeout();
           } else if ((s === 'failed' || s === 'disconnected') && acceptedRef.current && !savingRef.current) {
             abortReceive(false, 'connection lost — transfer interrupted ✗');
           } else if (s === 'failed' && !acceptedRef.current && !savingRef.current) {
             setStatus(CONNECTION_FAILURE_HELP);
           }
+        });
+        pc.addEventListener('iceconnectionstatechange', () => {
+          if (connectTimeoutEnabled && pc.iceConnectionState === 'checking') armReceiverConnectTimeout();
         });
       }
       await pc.setRemoteDescription(new RTCSessionDescription(checkedOffers[i]));
@@ -1777,13 +1849,6 @@ function App(): React.JSX.Element {
       pcsRef.current.push(pc);
       answers.push(pc.localDescription);
     }
-    // If the sender never shows up (or ICE stalls), don't hang forever.
-    recvTimerRef.current = setTimeout(() => {
-      if (!offerRef.current && !acceptedRef.current && !savingRef.current) {
-        setStatus(CONNECTION_FAILURE_HELP);
-        recvTeardown();
-      }
-    }, CONNECT_TIMEOUT_MS);
     return encodeDescs(answers);
   }
 
@@ -1837,7 +1902,7 @@ function App(): React.JSX.Element {
             setStatus('found the sender — waiting for connection details…');
           } else if (m.t === 'msg' && m.data && m.data.kind === 'offers') {
             gotOffers = true;
-            const replyCode = await answerOffers(decodeCode(m.data.code), buildRtcConfig(quickTurn));
+            const replyCode = await answerOffers(decodeCode(m.data.code), buildRtcConfig(quickTurn), true);
             sig.send({ t: 'msg', data: { kind: 'answers', code: replyCode } });
             setStatus('connecting…');
           } else if (m.t === 'gone') {
@@ -1875,6 +1940,7 @@ function App(): React.JSX.Element {
       setMode('recv');
       setShowManual(true);
       setCode(parsed.code);
+      setOfferImported(true);
       setStatus('Connection link ready. Tap Create reply link.');
       return;
     }
@@ -1886,6 +1952,7 @@ function App(): React.JSX.Element {
     setMode('send');
     setShowManual(true);
     setReplyIn(parsed.code);
+    setReplyImported(true);
     if (sendPcsRef.current.length !== NUM_CONNS) {
       setStatus('open this reply on the sender device while its original connection is still waiting');
       return;
@@ -1918,6 +1985,7 @@ function App(): React.JSX.Element {
             </Text>
             <View style={styles.heroRule} />
             <Text style={styles.heroSub}>SEND ANYTHING TO ANYONE</Text>
+            {status !== 'idle' ? <Text style={styles.pill}>● {status}</Text> : null}
             <View style={styles.heroModes}>
               <TouchableOpacity style={styles.heroCard} activeOpacity={0.85} onPress={() => setMode('send')}>
                 <View style={styles.heroCardHead}>
@@ -1981,7 +2049,7 @@ function App(): React.JSX.Element {
           <>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <TouchableOpacity onPress={resetAll}><Text style={styles.homeBtn}>← HOME</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => { resetAll(); }}><Text style={styles.homeBtn}>← HOME</Text></TouchableOpacity>
             <Text style={styles.logo}>
               <Text style={styles.y}>Y</Text><Text style={styles.share}>Share</Text>
             </Text>
@@ -2059,7 +2127,7 @@ function App(): React.JSX.Element {
             ) : null}
 
             {sendActive ? (
-              <TouchableOpacity style={styles.dangerBtn} onPress={cancelSend}>
+              <TouchableOpacity style={styles.dangerBtn} onPress={confirmCancelSend}>
                 <Text style={styles.dangerText}>✕ CANCEL TRANSFER</Text>
               </TouchableOpacity>
             ) : null}
@@ -2087,16 +2155,19 @@ function App(): React.JSX.Element {
 
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Serverless connection · Open their reply, then connect</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="(the reply link appears here)"
-                    placeholderTextColor={C.footer}
-                    multiline
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    value={replyIn}
-                    onChangeText={setReplyIn}
-                  />
+                  {replyImported ? (
+                    <Text style={styles.loadedConnection}>✓ Reply connection loaded</Text>
+                  ) : (
+                    <TextInput
+                      style={[styles.input, styles.linkInput]}
+                      placeholder="Paste the reply link"
+                      placeholderTextColor={C.footer}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      value={replyIn}
+                      onChangeText={(value) => { setReplyImported(false); setReplyIn(value); }}
+                    />
+                  )}
                   <TouchableOpacity
                     style={[styles.btn, !sendCode && styles.btnDisabled]}
                     disabled={!sendCode}
@@ -2130,16 +2201,19 @@ function App(): React.JSX.Element {
             {showManual ? (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>Serverless connection · Open the sender's link</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="(the sender's connection appears here)"
-                  placeholderTextColor={C.footer}
-                  multiline
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  value={code}
-                  onChangeText={setCode}
-                />
+                {offerImported ? (
+                  <Text style={styles.loadedConnection}>✓ Sender connection loaded</Text>
+                ) : (
+                  <TextInput
+                    style={[styles.input, styles.linkInput]}
+                    placeholder="Paste the sender's connection link"
+                    placeholderTextColor={C.footer}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={code}
+                    onChangeText={(value) => { setOfferImported(false); setCode(value); }}
+                  />
+                )}
                 <TouchableOpacity style={styles.btn} onPress={createReply}>
                   <Text style={styles.btnText}>CREATE REPLY LINK</Text>
                 </TouchableOpacity>
@@ -2197,7 +2271,7 @@ function App(): React.JSX.Element {
             ) : null}
 
             {recvActive ? (
-              <TouchableOpacity style={styles.dangerBtn} onPress={cancelReceive}>
+              <TouchableOpacity style={styles.dangerBtn} onPress={confirmCancelReceive}>
                 <Text style={styles.dangerText}>✕ CANCEL TRANSFER</Text>
               </TouchableOpacity>
             ) : null}
@@ -2205,7 +2279,7 @@ function App(): React.JSX.Element {
         )}
 
         {flowDone ? (
-          <TouchableOpacity style={styles.btnGhost} onPress={resetAll}>
+          <TouchableOpacity style={styles.btnGhost} onPress={() => { resetAll(); }}>
             <Text style={styles.btnGhostText}>HOME</Text>
           </TouchableOpacity>
         ) : null}
@@ -2288,6 +2362,11 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: C.tile, borderColor: C.ink, borderWidth: 1, color: C.ink,
     padding: 12, minHeight: 80, textAlignVertical: 'top', fontSize: 13, fontFamily: MONO,
+  },
+  linkInput: { minHeight: 48, height: 48, textAlignVertical: 'center' },
+  loadedConnection: {
+    backgroundColor: C.tile, borderColor: C.ink, borderWidth: 1, color: C.ink,
+    padding: 14, fontSize: 12, fontFamily: MONO,
   },
   passInput: { minHeight: 48, fontSize: 14, textAlignVertical: 'center' },
   quickInput: { fontSize: 24, letterSpacing: 6, minHeight: 56, textAlign: 'center', color: C.ink, fontFamily: MONO_B },

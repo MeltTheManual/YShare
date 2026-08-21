@@ -30,8 +30,15 @@ const {
 } = YShareEngine;
 const { waitDrain, flush, createTerminalAcker, createAttemptGate } = YShareLifecycle;
 
-const CONNECT_TIMEOUT_MS = 30000;  // ICE must land within this or we call it failed
+const CONNECT_TIMEOUT_MS = 60000;  // once ICE really starts, allow slow mobile networks a full minute
+const CANCEL_DRAIN_TIMEOUT_MS = 30000;
+const CANCEL_NOTICE_TIMEOUT_MS = 5000;   // how long an exit waits for the notice itself
 const PASSWORD_ATTEMPTS = 3;
+
+// Stopping a transfer cannot be undone, so ask first (owner request 2026-08-20).
+// One stray click used to kill a multi-gigabyte send with no way back.
+const CANCEL_CONFIRM_SEND = 'Cancel this transfer?\n\nThe file will not be delivered.';
+const CANCEL_CONFIRM_RECV = 'Cancel this transfer?\n\nThe partly received file will be deleted.';
 
 function setStatus(text, cls) {
   $('statusText').textContent = text;
@@ -706,28 +713,56 @@ async function sendRange(owner, dc, start, end, totalSize) {
 $('btnSendCancel').onclick = () => {
   const owner = S;
   if (!senderIsCurrent(owner) || owner.finished || owner.terminal) return;
+  if (!confirm(CANCEL_CONFIRM_SEND)) return;   // confirm() blocks, so state cannot move under us
   owner.cancelled = true;
   owner.terminal = true;
-  senderCtrlSend({ type: 'cancel' }, owner);
   closeSenderRead(owner);
   setStatus('cancelled', 'err');
   showSendResult(false, 'Transfer cancelled.');
   senderFlowEnded(owner);
-  senderTeardownAfterFlush(owner);   // the cancel is queued behind buffered file bytes
+  senderTeardownAfterCancel(owner);
 };
 
-// Mid-transfer the control channel holds up to a high-water mark of file bytes;
-// a fixed grace period tore the connection down before the queued 'cancel'
-// reached the receiver (it then showed "connection lost" instead of "sender
-// cancelled" — seen on-device 2026-07-10). Wait for the actual drain, capped.
-async function senderTeardownAfterFlush(owner) {
-  const dc = owner && owner.ctrl;
+// Cancellation must stop new reads first, let already queued file bytes leave,
+// then send the small control message. Sending cancel before the file buffers
+// drain can leave it stuck behind megabytes of data when teardown closes WebRTC.
+// `stopEarly` lets an exit path abandon the long file drain without abandoning
+// the small notice that still has to go out after it.
+async function waitSenderBuffers(owner, timeoutMs, channels = owner && owner.dcs, stopEarly = null) {
   const t0 = Date.now();
-  while (dc && dc.readyState === 'open' && dc.bufferedAmount > 0 && Date.now() - t0 < 3000) {
+  while (Array.isArray(channels)
+    && channels.some((dc) => dc && dc.readyState === 'open' && dc.bufferedAmount > 0)
+    && Date.now() - t0 < timeoutMs
+    && !(stopEarly && stopEarly())) {
     await new Promise((r) => setTimeout(r, 50));
   }
-  await new Promise((r) => setTimeout(r, 200));   // let the final frame hit the wire
-  senderTeardown(owner);
+}
+
+// The notice is deliberately slow, but "← Home" and "↺ New transfer" appear the
+// instant Cancel is pressed. Keep the pending notice on the owner so those exits
+// can flush it instead of closing WebRTC mid-drain, which made the receiver say
+// "connection lost" instead of "sender cancelled" (found by review 2026-08-20).
+function senderTeardownAfterCancel(owner) {
+  owner.cancelHurry = false;
+  owner.cancelNotice = (async () => {
+    await waitSenderBuffers(owner, CANCEL_DRAIN_TIMEOUT_MS, owner.dcs, () => owner.cancelHurry);
+    if (!senderIsCurrent(owner)) return;
+    senderCtrlSend({ type: 'cancel' }, owner);
+    await waitSenderBuffers(owner, CANCEL_NOTICE_TIMEOUT_MS, [owner.ctrl]);
+    await new Promise((r) => setTimeout(r, 300));
+    senderTeardown(owner);
+  })();
+  return owner.cancelNotice;
+}
+
+// An exit gives up the rest of the file drain but still waits, briefly and
+// visibly, for the cancel notice itself to leave. Bounded by
+// CANCEL_NOTICE_TIMEOUT_MS so Home can never hang.
+async function flushSenderCancelNotice(owner) {
+  if (!owner || !owner.cancelNotice) return;
+  owner.cancelHurry = true;
+  setStatus('sending the cancel notice…', 'warn');
+  await owner.cancelNotice.catch(() => {});
 }
 
 // --- quick connect (sender): room code from the signaling server -------------
@@ -921,6 +956,7 @@ function newReceiverState() {
     singleMetaChannels: new Set(),
     singleDoneChannels: new Set(),
     connectTimer: null,
+    connectTimeoutEnabled: false,
     sig: null,
     // --- folder receive (CHUNK D) ---
     folder: null,                   // { name, count, totalSize } once a folder is offered
@@ -1001,6 +1037,11 @@ async function cleanupAndReload() {
     senderOwner.terminal = true;
     senderCtrlSend({ type: 'cancel' }, senderOwner);
     closeSenderRead(senderOwner);
+  } else if (senderOwner && senderOwner.cancelNotice) {
+    // A cancel the person already pressed is still queued behind buffered file
+    // bytes. Skip the rest of that drain, but let the notice itself get out so
+    // the receiver hears "sender cancelled" rather than "connection lost".
+    await flushSenderCancelNotice(senderOwner);
   }
   if (receiverOwner && receiverOwner.terminal === 'completing' && receiverOwner.finalizePromise) {
     // The verified file/folder is in the tiny atomic commit step. Let that
@@ -1182,7 +1223,7 @@ function maybeFinalizeFolder(owner) {
 
 // Answer a decoded offers array with the given RTC config; returns the encoded
 // reply connector. Shared by the serverless and Quick Connect flows.
-async function answerOffers(offers, rtcConfig, quickAttempt = null) {
+async function answerOffers(offers, rtcConfig, quickAttempt = null, connectTimeoutEnabled = false) {
   if (quickAttempt) {
     if (!receiverQuickIsCurrent(quickAttempt, quickAttempt.socket)) throw new Error('quick attempt was replaced');
   } else {
@@ -1192,6 +1233,7 @@ async function answerOffers(offers, rtcConfig, quickAttempt = null) {
   if (R && !R.finished && !R.cancelled) throw new Error('a receive connection is already active');
   receiverTeardown(R);               // never leak the previous transfer's connections
   const owner = newReceiverState();
+  owner.connectTimeoutEnabled = connectTimeoutEnabled;
   R = owner;
   if (quickAttempt) quickAttempt.owner = owner;
   $('recvResult').textContent = '';
@@ -1221,6 +1263,13 @@ async function answerOffers(offers, rtcConfig, quickAttempt = null) {
     throw err;
   }
 
+  if (!receiverIsCurrent(owner) || owner.cancelled) throw new Error('receive attempt was replaced');
+  return encodeDescs(owner.pcs.map((pc) => pc.localDescription));
+}
+
+function armReceiverConnectTimeout(owner) {
+  if (!owner.connectTimeoutEnabled || !receiverIsCurrent(owner) || owner.connectTimer
+    || owner.offer || owner.finished || owner.cancelled) return;
   owner.connectTimer = setTimeout(() => {
     if (receiverIsCurrent(owner) && !owner.offer && !owner.finished && !owner.cancelled) {
       owner.cancelled = true;
@@ -1230,9 +1279,6 @@ async function answerOffers(offers, rtcConfig, quickAttempt = null) {
       $('btnQuickJoin').disabled = !canQuickConnect();
     }
   }, CONNECT_TIMEOUT_MS);
-
-  if (!receiverIsCurrent(owner) || owner.cancelled) throw new Error('receive attempt was replaced');
-  return encodeDescs(owner.pcs.map((pc) => pc.localDescription));
 }
 
 function wireReceiverConn(pc, owner) {
@@ -1243,6 +1289,7 @@ function wireReceiverConn(pc, owner) {
       if (owner.connectTimer) { clearTimeout(owner.connectTimer); owner.connectTimer = null; }
       setStatus('connected', 'on');
     } else if (s === 'connecting') {
+      armReceiverConnectTimeout(owner);
       setStatus('connecting…', 'warn');
     } else if (s === 'failed' || s === 'disconnected') {
       if (owner.accepted && !owner.finished && !owner.cancelled) {
@@ -1255,6 +1302,9 @@ function wireReceiverConn(pc, owner) {
         receiverTeardown(owner);
       }
     }
+  });
+  pc.addEventListener('iceconnectionstatechange', () => {
+    if (pc.iceConnectionState === 'checking') armReceiverConnectTimeout(owner);
   });
 }
 
@@ -1643,6 +1693,7 @@ $('btnDecline').onclick = () => {
 $('btnRecvCancel').onclick = () => {
   const owner = R;
   if (!receiverIsCurrent(owner) || owner.finished || owner.terminal) return;
+  if (!confirm(CANCEL_CONFIRM_RECV)) return;
   abortReceive(owner, true, 'cancelled', 'Transfer cancelled.');
 };
 
@@ -1704,7 +1755,7 @@ $('btnQuickJoin').onclick = async () => {
         quickTurn = m.turn;
         setStatus('found the sender — waiting for connection details…', 'warn');
       } else if (m.t === 'msg' && m.data && m.data.kind === 'offers') {
-        const reply = await answerOffers(decodeCode(m.data.code), buildRtcConfig(quickTurn), attempt);
+        const reply = await answerOffers(decodeCode(m.data.code), buildRtcConfig(quickTurn), attempt, true);
         if (!receiverQuickIsCurrent(attempt, sig)) return;
         const owner = attempt.owner;
         if (!receiverIsCurrent(owner) || owner.cancelled) throw new Error('receive attempt was replaced');
@@ -1792,6 +1843,7 @@ function importConnectionLink(value) {
     $('modeRecv').click();
     unlockManual('manualRecv');
     $('offerIn').value = parsed.code;
+    $('offerIn').style.display = 'none';
     setStatus('Connection link ready. Click Create reply link.', 'warn');
     return;
   }
@@ -1802,6 +1854,7 @@ function importConnectionLink(value) {
   $('modeSend').click();
   unlockManual('manualSend');
   $('answerIn').value = parsed.code;
+  $('answerIn').style.display = 'none';
   if (!S || !Array.isArray(S.pcs) || S.pcs.length !== NUM_CONNS) {
     $('btnConnectSend').disabled = true;
     setStatus('open this reply on the sender device while its original connection is still waiting', 'err');
