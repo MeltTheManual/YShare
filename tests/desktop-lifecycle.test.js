@@ -234,4 +234,121 @@ test('connection links use validated OS handlers and a fragment-only HTTPS bridg
     'the static bridge must not send the connector anywhere');
   assert.doesNotMatch(bridge, /location\.(search|pathname)/,
     'the connector route must stay in the URL fragment');
+
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  assert.match(renderer, /\$\('offerIn'\)\.style\.display = 'none'/,
+    'desktop must hide an imported offer connector');
+  assert.match(renderer, /\$\('answerIn'\)\.style\.display = 'none'/,
+    'desktop must hide an imported reply connector');
+  assert.match(mobile, /replyImported \? \([\s\S]*Reply connection loaded/,
+    'Android must show a short loaded state instead of rendering the imported reply connector');
+  assert.match(mobile, /offerImported \? \([\s\S]*Sender connection loaded/,
+    'Android must show a short loaded state instead of rendering the imported offer connector');
+  assert.doesNotMatch(mobile, /placeholder="Paste the (?:reply|sender)[^"]*"[\s\S]{0,180}\bmultiline\b/,
+    'manual link fields must remain one line instead of expanding to the connector length');
+  assert.match(mobile, /mode === null[\s\S]{0,500}status !== 'idle'/,
+    'Android must render connection-link errors on the landing screen');
+});
+
+test('human link sharing is not counted as network connection time', () => {
+  const renderer = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'renderer.js'), 'utf8');
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+
+  assert.match(renderer, /const CONNECT_TIMEOUT_MS = 60000/);
+  assert.match(mobile, /const CONNECT_TIMEOUT_MS = 60000/);
+  assert.match(renderer, /answerOffers\(decodeCode\(m\.data\.code\), buildRtcConfig\(quickTurn\), attempt, true\)/,
+    'desktop Quick Connect must enable the receiver timeout');
+  assert.match(renderer, /answerOffers\(offers, buildRtcConfig\(turn\), attempt\)/,
+    'desktop serverless sharing must leave the receiver timeout disabled');
+  assert.match(mobile, /answerOffers\(decodeCode\(m\.data\.code\), buildRtcConfig\(quickTurn\), true\)/,
+    'Android Quick Connect must enable the receiver timeout');
+  assert.match(mobile, /answerOffers\(offers, buildRtcConfig\(turn\)\)/,
+    'Android serverless sharing must leave the receiver timeout disabled');
+  assert.match(renderer, /if \(!owner\.connectTimeoutEnabled/);
+  assert.match(mobile, /s === 'connecting' && connectTimeoutEnabled/);
+
+  const desktopAnswer = renderer.slice(renderer.indexOf('async function answerOffers'), renderer.indexOf('function armReceiverConnectTimeout'));
+  const mobileAnswer = mobile.slice(mobile.indexOf('async function answerOffers'), mobile.indexOf('// Serverless flow: open the sender link'));
+  assert.doesNotMatch(desktopAnswer, /connectTimer = setTimeout/,
+    'desktop must not time the human while the reply link is being shared');
+  assert.doesNotMatch(mobileAnswer, /recvTimerRef\.current = setTimeout/,
+    'Android must not time the human while the reply link is being shared');
+});
+
+test('sender cancellation drains queued file data before sending the reason', () => {
+  const renderer = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'renderer.js'), 'utf8');
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  const desktopCancel = renderer.slice(renderer.indexOf('function senderTeardownAfterCancel'), renderer.indexOf('async function flushSenderCancelNotice'));
+  const mobileCancel = mobile.slice(mobile.indexOf('async function cancelSend()'), mobile.indexOf('async function flushPendingCancel()'));
+
+  assert.ok(desktopCancel && mobileCancel, 'both cancellation paths must be found');
+  assert.match(desktopCancel, /await waitSenderBuffers\(owner, CANCEL_DRAIN_TIMEOUT_MS[\s\S]*?senderCtrlSend\(\{ type: 'cancel' \}/,
+    'desktop must drain queued file bytes before its cancellation message');
+  assert.match(mobileCancel, /await waitSendBuffers\(CANCEL_DRAIN_TIMEOUT_MS[\s\S]*?type: 'cancel'/,
+    'Android must drain queued file bytes before its cancellation message');
+});
+
+test('leaving during a cancel still delivers the cancel notice', () => {
+  const renderer = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'renderer.js'), 'utf8');
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+
+  // The drain helpers must accept an early-stop predicate, or an exit path has
+  // no way to skip the long file drain without also killing the notice.
+  assert.match(renderer, /async function waitSenderBuffers\(owner, timeoutMs, channels = owner && owner\.dcs, stopEarly = null\)/,
+    'desktop drain helper must accept an early-stop predicate');
+  assert.match(mobile, /async function waitSendBuffers\(timeoutMs: number, channels = sendDcsRef\.current,\s*\n\s*stopEarly: \(\(\) => boolean\) \| null = null\)/,
+    'Android drain helper must accept an early-stop predicate');
+  assert.match(renderer, /&& !\(stopEarly && stopEarly\(\)\)/,
+    'desktop drain loop must honour the early-stop predicate');
+  assert.match(mobile, /&& !\(stopEarly && stopEarly\(\)\)/,
+    'Android drain loop must honour the early-stop predicate');
+
+  // The pending notice must be tracked so an exit can wait for it.
+  assert.match(renderer, /owner\.cancelNotice = \(async \(\) => \{/,
+    'desktop must keep the pending cancel notice on the sender owner');
+  assert.match(mobile, /cancelNoticeRef\.current = notice;/,
+    'Android must keep the pending cancel notice in a ref');
+  assert.match(renderer, /waitSenderBuffers\(owner, CANCEL_DRAIN_TIMEOUT_MS, owner\.dcs, \(\) => owner\.cancelHurry\)/,
+    'desktop file drain must be interruptible by an exit');
+  assert.match(mobile, /waitSendBuffers\(CANCEL_DRAIN_TIMEOUT_MS, channels, \(\) => cancelHurryRef\.current\)/,
+    'Android file drain must be interruptible by an exit');
+
+  // Both exits must flush, and the wait after the notice is sent must stay capped.
+  const desktopExit = renderer.slice(renderer.indexOf('async function cleanupAndReload'), renderer.indexOf("$('btnSendNew').onclick"));
+  assert.match(desktopExit, /await flushSenderCancelNotice\(senderOwner\)/,
+    'desktop Home and New transfer must flush a pending cancel notice before teardown');
+  const mobileReset = mobile.slice(mobile.indexOf('async function resetAll()'), mobile.indexOf('cleanupSenderCache()', mobile.indexOf('async function resetAll()')));
+  assert.match(mobileReset, /await flushPendingCancel\(\)/,
+    'Android Home, Back, and New transfer must flush a pending cancel notice before teardown');
+  assert.match(renderer, /await waitSenderBuffers\(owner, CANCEL_NOTICE_TIMEOUT_MS, \[owner\.ctrl\]\)/,
+    'desktop must cap the wait for the notice itself');
+  assert.match(mobile, /await waitSendBuffers\(CANCEL_NOTICE_TIMEOUT_MS, dc \? \[dc\] : \[\]\)/,
+    'Android must cap the wait for the notice itself');
+
+  // Android's hardware Back goes through the same guarded reset.
+  assert.match(mobile, /if \(mode !== null\) \{ resetAll\(\); return true; \}/,
+    'Android hardware Back must use the same guarded reset as the Home button');
+});
+
+test('cancelling a transfer asks for confirmation first', () => {
+  const renderer = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'renderer.js'), 'utf8');
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+
+  const desktopSendCancel = renderer.slice(renderer.indexOf("$('btnSendCancel').onclick"), renderer.indexOf('async function waitSenderBuffers'));
+  const desktopRecvCancel = renderer.slice(renderer.indexOf("$('btnRecvCancel').onclick"));
+  assert.match(desktopSendCancel, /if \(!confirm\(CANCEL_CONFIRM_SEND\)\) return;/,
+    'desktop sender cancel must confirm before stopping the transfer');
+  assert.match(desktopRecvCancel, /if \(!confirm\(CANCEL_CONFIRM_RECV\)\) return;/,
+    'desktop receiver cancel must confirm before stopping the transfer');
+
+  assert.match(mobile, /function confirmCancelSend\(\)[\s\S]{0,320}Alert\.alert\('Cancel this transfer\?'[\s\S]{0,320}onPress: \(\) => \{ cancelSend\(\); \}/,
+    'Android sender cancel must confirm before stopping the transfer');
+  assert.match(mobile, /function confirmCancelReceive\(\)[\s\S]{0,320}Alert\.alert\('Cancel this transfer\?'[\s\S]{0,320}onPress: \(\) => \{ cancelReceive\(\); \}/,
+    'Android receiver cancel must confirm before stopping the transfer');
+  assert.match(mobile, /onPress=\{confirmCancelSend\}/,
+    'the Android sender cancel button must go through the confirmation');
+  assert.match(mobile, /onPress=\{confirmCancelReceive\}/,
+    'the Android receiver cancel button must go through the confirmation');
+  assert.doesNotMatch(mobile, /onPress=\{cancelSend\}|onPress=\{cancelReceive\}/,
+    'no cancel button may bypass its confirmation');
 });

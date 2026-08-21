@@ -103,6 +103,11 @@ receiver session. An answer link is accepted only by the sender process that sti
 offer. Opening an answer after the sender app was closed cannot restore the lost WebRTC state. The same
 WebRTC, consent, validation, transfer, and integrity paths are used.
 
+The serverless receiver has no artificial connection countdown while a person sends the reply link back.
+Quick Connect enables a 60-second receiver connection timeout because its server returns the reply
+automatically. The serverless sender starts its own connection timeout only after the reply has been opened.
+WebRTC failure events still end either flow and show the network guidance.
+
 Without a safe TURN grant the manual path is direct/STUN-only. That can fail for CGNAT/symmetric-NAT pairs;
 it must not silently fall back to insecure production transport.
 
@@ -155,6 +160,10 @@ the receiver performs positioned writes at the declared absolute offsets.
 Backpressure pauses a sender above 1 MiB queued on that channel and resumes below 256 KiB. Drain/flush waits
 must settle when a channel closes, errors, or a transfer is cancelled; they must never leave an abandoned
 Promise holding the transfer alive.
+
+When a sender cancels, it first stops reading more source bytes, drains already queued file bytes, sends the
+cancel control message, and gives that control message time to leave before closing the channels. This keeps
+the receiver's result truthful instead of turning a deliberate cancellation into a generic connection loss.
 
 There is no per-chunk hash. A single-file sender calculates one SHA-256 for the source; the receiver hashes
 the complete reassembled file before publication. A folder calculates and verifies one SHA-256 per file.

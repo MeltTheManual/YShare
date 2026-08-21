@@ -58,6 +58,9 @@ receives file bytes.
 The connector is still long underneath the link. The chat must preserve the complete address. If a link is
 shortened or broken, create a fresh one, try another chat, or use Quick Connect.
 
+YShare does not start a countdown while people exchange the serverless offer and reply links. The app waits
+for the reply, then reports clearly if the devices cannot establish a network path.
+
 Both devices must use the same Quick Connect server because that is the meeting point where they exchange
 temporary connection information. For example, if the server is `wss://signal.example.com`, enter that exact
 address on the computer and the phone. The address is a setting, not code that must be written into YShare.
